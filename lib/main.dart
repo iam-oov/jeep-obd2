@@ -9,7 +9,8 @@ void main() {
     ChangeNotifierProvider(
       create: (_) => AppState()
         ..loadDescriptions()
-        ..loadVehicle(),
+        ..loadVehicle()
+        ..loadApiKeys(),
       child: const JeepObdApp(),
     ),
   );

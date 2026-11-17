@@ -16,24 +16,26 @@ Probada con un Jeep Wrangler TJ 1998 (ISO 9141-2) y un clon ELM327 Bluetooth cl�
 
 ## Instalar
 
-Descarga el APK de [Releases](../../releases) e instálalo en Android 7 o posterior. El APK publicado no trae llaves de API: todo funciona salvo la búsqueda de videos.
+Descarga el APK de [Releases](../../releases) e instálalo en Android 7 o posterior.
+
+Para la búsqueda de videos, la app pide tus propias llaves (menú ⋮ → **Llaves de API**, o la primera vez que buscas un video):
+
+- **Anthropic**: console.anthropic.com → API Keys.
+- **YouTube**: Google Cloud → habilita YouTube Data API v3 → Credenciales → API key.
+
+La app prueba las llaves antes de guardarlas y las guarda cifradas solo en tu teléfono (Android Keystore). El APK publicado no trae ninguna llave.
 
 ## Compilar
 
 Requisitos: Flutter estable y Android SDK.
 
-1. Copia `secrets.example.json` a `secrets.json` y pon tus llaves:
-   - `ANTHROPIC_API_KEY`: de console.anthropic.com.
-   - `YOUTUBE_API_KEY`: de Google Cloud, con la YouTube Data API v3 habilitada.
-2. Compila:
+```
+flutter build apk --release
+```
 
-   ```
-   flutter build apk --release --dart-define-from-file=secrets.json
-   ```
+El APK queda en `build/app/outputs/flutter-apk/app-release.apk`. Las llaves se capturan dentro de la app.
 
-3. Instala `build/app/outputs/flutter-apk/app-release.apk`.
-
-`secrets.json` está en `.gitignore`. Las llaves quedan dentro del APK que compiles: no publiques ese APK.
+Opcional, solo para tu propio teléfono: copia `secrets.example.json` a `secrets.json`, pon tus llaves y compila con `--dart-define-from-file=secrets.json` para que la app ya las traiga. `secrets.json` está en `.gitignore`. Ese APK lleva tus llaves adentro: no lo publiques.
 
 ## Pruebas
 

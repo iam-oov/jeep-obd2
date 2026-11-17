@@ -10,6 +10,7 @@ import 'bluetooth/bluetooth_transport.dart';
 import 'bluetooth/elm_connection.dart';
 import 'data/dtc_descriptions.dart';
 import 'obd/obd_service.dart';
+import 'solutions/api_keys.dart';
 import 'vehicle/vehicle.dart';
 
 enum ConnectionStatus { disconnected, connecting, initializing, ready }
@@ -56,11 +57,35 @@ class AppState extends ChangeNotifier {
     classic.FlutterBlueClassic? bluetooth,
     VehicleStore? vehicleStore,
     VinDecoder? vinDecoder,
-  })  : _bluetooth = bluetooth ?? classic.FlutterBlueClassic(),
+    ApiKeyStore? apiKeyStore,
+  })  : _apiKeyStore = apiKeyStore ?? ApiKeyStore(),
+        _bluetooth = bluetooth ?? classic.FlutterBlueClassic(),
         _vehicleStore = vehicleStore ?? VehicleStore(),
         _vinDecoder = vinDecoder ?? VinDecoder();
 
   final VehicleStore _vehicleStore;
+  final ApiKeyStore _apiKeyStore;
+
+  /// Llaves de Anthropic y YouTube para la búsqueda de videos.
+  ApiKeys apiKeys = const ApiKeys();
+
+  Future<void> loadApiKeys() async {
+    apiKeys = await _apiKeyStore.load();
+    notifyListeners();
+  }
+
+  Future<void> saveApiKeys(ApiKeys keys) async {
+    await _apiKeyStore.save(keys);
+    apiKeys = keys;
+    _log(LogKind.info, 'Llaves de API guardadas');
+    notifyListeners();
+  }
+
+  Future<void> clearApiKeys() async {
+    await _apiKeyStore.clear();
+    apiKeys = await _apiKeyStore.load();
+    notifyListeners();
+  }
   final VinDecoder _vinDecoder;
 
   /// Vehículos guardados por el usuario (formulario modal).

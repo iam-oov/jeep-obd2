@@ -1,22 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../app_state.dart';
 
 import '../solutions/claude_client.dart';
 import '../solutions/video_finder.dart';
 import '../solutions/youtube_client.dart';
 import '../vehicle/vehicle.dart';
+import 'api_keys_dialog.dart';
 import 'vehicle_dialog.dart';
 import 'widgets.dart';
 
-/// Llaves inyectadas al compilar con `--dart-define-from-file=secrets.json`.
-const anthropicApiKey = String.fromEnvironment('ANTHROPIC_API_KEY');
-const youtubeApiKey = String.fromEnvironment('YOUTUBE_API_KEY');
-
-/// Abre la búsqueda de videos para [code]; si no hay vehículo guardado,
-/// primero lo pide con el modal.
+/// Abre la búsqueda de videos para [code]. Antes pide, con sus modales, el
+/// vehículo y las llaves de API si faltan.
 Future<void> openVideosFor(BuildContext context, String code, String description) async {
   final vehicle = await ensureVehicle(context);
   if (vehicle == null || !context.mounted) return;
+  if (!context.read<AppState>().apiKeys.complete) {
+    final ok = await showApiKeysDialog(
+      context,
+      note: 'Para buscar videos necesitas tus llaves de Anthropic (Claude Haiku) y de '
+          'YouTube. Se guardan cifradas solo en este teléfono.',
+    );
+    if (!ok || !context.mounted) return;
+  }
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => VideosScreen(code: code, description: description, vehicle: vehicle),
@@ -37,7 +45,7 @@ class VideosScreen extends StatefulWidget {
   final String description;
   final Vehicle vehicle;
 
-  /// Para pruebas; en la app se crea con las llaves de compilación.
+  /// Para pruebas; en la app se crea con las llaves guardadas.
   final VideoFinder? finder;
 
   @override
@@ -47,14 +55,20 @@ class VideosScreen extends StatefulWidget {
 class _VideosScreenState extends State<VideosScreen> {
   Future<VideoSearchResult>? _future;
 
-  VideoFinder? get _finder =>
-      widget.finder ??
-      (anthropicApiKey.isEmpty || youtubeApiKey.isEmpty
-          ? null
-          : VideoFinder(
-              claude: ClaudeClient(apiKey: anthropicApiKey),
-              youtube: YoutubeClient(apiKey: youtubeApiKey),
-            ));
+  VideoFinder? get _finder {
+    if (widget.finder != null) return widget.finder;
+    final keys = context.read<AppState>().apiKeys;
+    if (!keys.complete) return null;
+    return VideoFinder(
+      claude: ClaudeClient(apiKey: keys.anthropic),
+      youtube: YoutubeClient(apiKey: keys.youtube),
+    );
+  }
+
+  Future<void> _editKeys() async {
+    final saved = await showApiKeysDialog(context);
+    if (saved && mounted) _search(refresh: true);
+  }
 
   @override
   void initState() {
@@ -84,15 +98,31 @@ class _VideosScreenState extends State<VideosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Videos para ${widget.code}')),
+      appBar: AppBar(
+        title: Text('Videos para ${widget.code}'),
+        actions: [
+          if (widget.finder == null)
+            IconButton(
+              tooltip: 'Llaves de API',
+              icon: const Icon(Icons.key),
+              onPressed: _editKeys,
+            ),
+        ],
+      ),
       body: _finder == null
-          ? const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'Falta configurar las llaves de API. Compila con:\n\n'
-                'flutter build apk --debug --dart-define-from-file=secrets.json\n\n'
-                'donde secrets.json tiene ANTHROPIC_API_KEY y YOUTUBE_API_KEY '
-                '(ver secrets.example.json).',
+          ? Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Faltan tus llaves de Anthropic y YouTube para buscar videos.'),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: _editKeys,
+                    icon: const Icon(Icons.key),
+                    label: const Text('Configurar llaves'),
+                  ),
+                ],
               ),
             )
           : FutureBuilder<VideoSearchResult>(

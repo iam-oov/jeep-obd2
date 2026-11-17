@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import 'api_keys_dialog.dart';
 import 'diagnosis_screen.dart';
+import 'log_screen.dart';
 import 'vehicle_dialog.dart';
 import 'widgets.dart';
 
@@ -83,7 +85,29 @@ class _DevicesScreenState extends State<DevicesScreen> {
             onPressed: () => showGarageSheet(context),
           ),
           const ManualCodeButton(),
-          const LogButton(),
+          PopupMenuButton<String>(
+            key: const Key('more-menu'),
+            tooltip: 'Más opciones',
+            onSelected: (v) {
+              if (v == 'keys') {
+                showApiKeysDialog(context);
+              } else {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const LogScreen()),
+                );
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'keys',
+                child: ListTile(leading: Icon(Icons.key), title: Text('Llaves de API')),
+              ),
+              PopupMenuItem(
+                value: 'log',
+                child: ListTile(leading: Icon(Icons.terminal), title: Text('Log de comandos')),
+              ),
+            ],
+          ),
         ],
       ),
       body: RefreshIndicator(
