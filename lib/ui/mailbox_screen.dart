@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../solutions/cerebro_client.dart';
 import 'widgets.dart';
 
-/// "Buzón": send improvement requests for this app to coordinating-brain,
+/// "Sugerencias" (formerly "Buzón"): send improvement requests for this app to coordinating-brain,
 /// follow their status, and download the latest APK built from them.
 class MailboxScreen extends StatefulWidget {
   const MailboxScreen({super.key, this.client, this.codeStore, this.openUrl});
@@ -161,7 +161,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Buzón'),
+        title: const Text('Sugerencias'),
         actions: [
           if (_phase == _Phase.ready)
             IconButton(tooltip: 'Cambiar código', icon: const Icon(Icons.logout), onPressed: _changeCode),

@@ -127,6 +127,8 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Sugerencias'), findsOneWidget);
+    expect(find.text('Buzón'), findsNothing);
 
     // Wrong code first.
     await tester.enterText(find.byKey(const Key('cerebro-code')), '9999');

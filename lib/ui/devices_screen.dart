@@ -105,7 +105,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
             itemBuilder: (_) => const [
               PopupMenuItem(
                 value: 'mailbox',
-                child: ListTile(leading: Icon(Icons.inbox), title: Text('Buzón')),
+                child: ListTile(leading: Icon(Icons.inbox), title: Text('Sugerencias')),
               ),
               PopupMenuItem(
                 value: 'keys',
