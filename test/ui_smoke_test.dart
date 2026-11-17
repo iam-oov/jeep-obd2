@@ -117,12 +117,15 @@ class _FakeFinder extends VideoFinder {
 void videosScreenTests() {
   testWidgets('VideosScreen busca al abrir y muestra resultados', (tester) async {
     final finder = _FakeFinder();
-    await tester.pumpWidget(MaterialApp(
-      home: VideosScreen(
-        code: 'P1282',
-        description: 'Relé bomba',
-        vehicle: const Vehicle(make: 'Nissan', model: 'Tsuru'),
-        finder: finder,
+    await tester.pumpWidget(ChangeNotifierProvider(
+      create: (_) => AppState(),
+      child: MaterialApp(
+        home: VideosScreen(
+          code: 'P1282',
+          description: 'Relé bomba',
+          vehicle: const Vehicle(make: 'Nissan', model: 'Tsuru'),
+          finder: finder,
+        ),
       ),
     ));
     await tester.pumpAndSettle();

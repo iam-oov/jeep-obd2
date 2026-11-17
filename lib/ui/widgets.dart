@@ -83,47 +83,48 @@ class ProgressCard extends StatelessWidget {
 }
 
 /// Enter a code by hand (e.g. read with another scanner) and search videos.
+final _manualCodePattern = RegExp(r'^[PCBU][0-3][0-9A-F]{3}$');
+
+/// Asks for a code by hand and opens its video search.
+Future<void> askCodeAndOpen(BuildContext context) async {
+  final controller = TextEditingController();
+  final code = await showDialog<String>(
+    context: context,
+    builder: (ctx) {
+      void submit() {
+        final c = controller.text.trim().toUpperCase();
+        if (_manualCodePattern.hasMatch(c)) Navigator.pop(ctx, c);
+      }
+
+      return AlertDialog(
+        title: const Text('Buscar un código'),
+        content: TextField(
+          key: const Key('manual-code'),
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(hintText: 'P1282', helperText: 'Letra + 4 dígitos'),
+          onSubmitted: (_) => submit(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          FilledButton(onPressed: submit, child: const Text('Buscar videos')),
+        ],
+      );
+    },
+  );
+  if (code == null || !context.mounted) return;
+  final desc = context.read<AppState>().descriptions?.describe(code) ?? code;
+  await openVideosFor(context, code, desc);
+}
+
 class ManualCodeButton extends StatelessWidget {
   const ManualCodeButton({super.key});
-
-  static final _valid = RegExp(r'^[PCBU][0-3][0-9A-F]{3}$');
-
-  Future<void> _ask(BuildContext context) async {
-    final controller = TextEditingController();
-    final code = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        void submit() {
-          final c = controller.text.trim().toUpperCase();
-          if (_valid.hasMatch(c)) Navigator.pop(ctx, c);
-        }
-
-        return AlertDialog(
-          title: const Text('Buscar un código'),
-          content: TextField(
-            key: const Key('manual-code'),
-            controller: controller,
-            autofocus: true,
-            textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(hintText: 'P1282', helperText: 'Letra + 4 dígitos'),
-            onSubmitted: (_) => submit(),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-            FilledButton(onPressed: submit, child: const Text('Buscar videos')),
-          ],
-        );
-      },
-    );
-    if (code == null || !context.mounted) return;
-    final desc = context.read<AppState>().descriptions?.describe(code) ?? code;
-    await openVideosFor(context, code, desc);
-  }
 
   @override
   Widget build(BuildContext context) => IconButton(
         tooltip: 'Buscar un código a mano',
         icon: const Icon(Icons.manage_search),
-        onPressed: () => _ask(context),
+        onPressed: () => askCodeAndOpen(context),
       );
 }

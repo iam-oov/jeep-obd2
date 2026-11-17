@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
-
+import '../data/dtc_descriptions.dart';
 import '../solutions/claude_client.dart';
 import '../solutions/video_finder.dart';
 import '../solutions/youtube_client.dart';
@@ -55,6 +55,18 @@ class VideosScreen extends StatefulWidget {
 class _VideosScreenState extends State<VideosScreen> {
   Future<VideoSearchResult>? _future;
 
+  /// The user chose to search a code that is not in the local table.
+  bool _searchAnyway = false;
+
+  DtcDescriptions? get _table => context.read<AppState>().descriptions;
+
+  /// Codes missing from the table (e.g. typed by mistake) are not sent to
+  /// Haiku, so it cannot invent a repair for them. With no table loaded, any
+  /// code is allowed.
+  bool get _known => _table?.isKnown(widget.code) ?? true;
+
+  List<String> get _suggestions => _table?.similar(widget.code) ?? const [];
+
   VideoFinder? get _finder {
     if (widget.finder != null) return widget.finder;
     final keys = context.read<AppState>().apiKeys;
@@ -73,7 +85,7 @@ class _VideosScreenState extends State<VideosScreen> {
   @override
   void initState() {
     super.initState();
-    _search();
+    if (_known) _search();
   }
 
   void _search({bool refresh = false}) {
@@ -84,6 +96,25 @@ class _VideosScreenState extends State<VideosScreen> {
     setState(() {
       _future = future;
     });
+  }
+
+  void _searchAnywayNow() {
+    setState(() => _searchAnyway = true);
+    _search();
+  }
+
+  /// Replaces this screen with the search for a suggested code.
+  void _pickCode(String code) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => VideosScreen(
+          code: code,
+          description: _table?.describe(code) ?? code,
+          vehicle: widget.vehicle,
+          finder: widget.finder,
+        ),
+      ),
+    );
   }
 
   Future<void> _open(YoutubeVideo v) async {
@@ -97,6 +128,7 @@ class _VideosScreenState extends State<VideosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final unknown = !_known && !_searchAnyway;
     return Scaffold(
       appBar: AppBar(
         title: Text('Videos para ${widget.code}'),
@@ -109,58 +141,151 @@ class _VideosScreenState extends State<VideosScreen> {
             ),
         ],
       ),
-      body: _finder == null
-          ? Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Faltan tus llaves de Anthropic y YouTube para buscar videos.'),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: _editKeys,
-                    icon: const Icon(Icons.key),
-                    label: const Text('Configurar llaves'),
-                  ),
-                ],
-              ),
+      body: unknown
+          ? _UnknownCode(
+              code: widget.code,
+              suggestions: _suggestions,
+              onPick: _pickCode,
+              onAnother: () => askCodeAndOpen(context),
+              onSearchAnyway: _finder == null ? null : _searchAnywayNow,
             )
-          : FutureBuilder<VideoSearchResult>(
-              future: _future,
-              builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return ListView(children: const [
-                    ProgressCard(text: 'Haiku está buscando videos en YouTube… (~10 s)'),
-                  ]);
-                }
-                if (snap.hasError) {
-                  final e = snap.error;
-                  final msg = e is ClaudeException || e is YoutubeException
-                      ? e.toString()
-                      : 'Error inesperado: $e';
-                  return ListView(children: [
-                    ErrorBanner(message: msg, onClose: _search),
-                    Center(
-                      child: FilledButton.icon(
-                        onPressed: _search,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Reintentar'),
+          : _finder == null
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Faltan tus llaves de Anthropic y YouTube para buscar videos.'),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _editKeys,
+                        icon: const Icon(Icons.key),
+                        label: const Text('Configurar llaves'),
                       ),
-                    ),
-                  ]);
-                }
-                return _Results(
-                  code: widget.code,
-                  description: widget.description,
-                  vehicle: widget.vehicle.description,
-                  result: snap.data!,
-                  onOpen: _open,
-                  onRetry: () => _search(refresh: true),
-                );
-              },
-            ),
+                    ],
+                  ),
+                )
+              : FutureBuilder<VideoSearchResult>(
+                  future: _future,
+                  builder: (context, snap) {
+                    if (snap.connectionState != ConnectionState.done) {
+                      return ListView(children: const [
+                        ProgressCard(text: 'Haiku está buscando videos en YouTube… (~10 s)'),
+                      ]);
+                    }
+                    if (snap.hasError) {
+                      final e = snap.error;
+                      final msg = e is ClaudeException || e is YoutubeException
+                          ? e.toString()
+                          : 'Error inesperado: $e';
+                      return ListView(children: [
+                        ErrorBanner(message: msg, onClose: _search),
+                        Center(
+                          child: FilledButton.icon(
+                            onPressed: _search,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Reintentar'),
+                          ),
+                        ),
+                      ]);
+                    }
+                    return _Results(
+                      code: widget.code,
+                      description: widget.description,
+                      vehicle: widget.vehicle.description,
+                      result: snap.data!,
+                      suggestions: _suggestions,
+                      onOpen: _open,
+                      onRetry: () => _search(refresh: true),
+                      onPick: _pickCode,
+                      onAnother: () => askCodeAndOpen(context),
+                    );
+                  },
+                ),
     );
   }
+}
+
+/// Shown instead of a search when the code is not in the local table.
+class _UnknownCode extends StatelessWidget {
+  const _UnknownCode({
+    required this.code,
+    required this.suggestions,
+    required this.onPick,
+    required this.onAnother,
+    this.onSearchAnyway,
+  });
+
+  final String code;
+  final List<String> suggestions;
+  final ValueChanged<String> onPick;
+  final VoidCallback onAnother;
+  final VoidCallback? onSearchAnyway;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$code no está en la tabla de códigos.', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
+                const Text(
+                  'Puede que lo hayas escrito mal. Sin el código en la tabla no buscamos '
+                  'videos, para no inventar una reparación.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (suggestions.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text('Quizá quisiste decir:', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          _CodeChips(codes: suggestions, onPick: onPick),
+        ],
+        const SizedBox(height: 24),
+        FilledButton.icon(
+          onPressed: onAnother,
+          icon: const Icon(Icons.manage_search),
+          label: const Text('Buscar otro código'),
+        ),
+        if (onSearchAnyway != null)
+          TextButton(
+            onPressed: onSearchAnyway,
+            child: const Text('Buscar videos de todos modos'),
+          ),
+      ],
+    );
+  }
+}
+
+/// Tappable codes, used for "did you mean" suggestions.
+class _CodeChips extends StatelessWidget {
+  const _CodeChips({required this.codes, required this.onPick});
+
+  final List<String> codes;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final c in codes)
+            ActionChip(
+              key: Key('suggest-$c'),
+              label: Text(c),
+              onPressed: () => onPick(c),
+            ),
+        ],
+      );
 }
 
 class _Results extends StatelessWidget {
@@ -169,16 +294,22 @@ class _Results extends StatelessWidget {
     required this.description,
     required this.vehicle,
     required this.result,
+    required this.suggestions,
     required this.onOpen,
     required this.onRetry,
+    required this.onPick,
+    required this.onAnother,
   });
 
   final String code;
   final String description;
   final String vehicle;
   final VideoSearchResult result;
+  final List<String> suggestions;
   final void Function(YoutubeVideo) onOpen;
   final VoidCallback onRetry;
+  final ValueChanged<String> onPick;
+  final VoidCallback onAnother;
 
   @override
   Widget build(BuildContext context) {
@@ -213,6 +344,14 @@ class _Results extends StatelessWidget {
                   icon: const Icon(Icons.refresh),
                   label: const Text('Buscar otra vez'),
                 ),
+                const SizedBox(height: 8),
+                TextButton(onPressed: onAnother, child: const Text('Buscar otro código')),
+                if (suggestions.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text('Códigos parecidos:', style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 8),
+                  _CodeChips(codes: suggestions, onPick: onPick),
+                ],
               ],
             ),
           )
