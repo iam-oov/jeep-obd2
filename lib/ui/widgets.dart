@@ -82,6 +82,12 @@ class ProgressCard extends StatelessWidget {
       );
 }
 
+/// Formats a date and time as "dd/mm/aaaa HH:mm" (24 h), e.g. "05/03/2026 09:07".
+String formatDateTime(DateTime d) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(d.day)}/${two(d.month)}/${d.year} ${two(d.hour)}:${two(d.minute)}';
+}
+
 /// Enter a code by hand (e.g. read with another scanner) and search videos.
 final _manualCodePattern = RegExp(r'^[PCBU][0-3][0-9A-F]{3}$');
 

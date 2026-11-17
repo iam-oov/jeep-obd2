@@ -136,7 +136,7 @@ class DiagnosisScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  'Última lectura: ${TimeOfDay.fromDateTime(state.lastRead!).format(context)}',
+                  'Última lectura: ${formatDateTime(state.lastRead!)}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
