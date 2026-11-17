@@ -1,46 +1,57 @@
 # Jeep OBD2
 
-App Android en Flutter que lee y borra códigos de falla (DTC) con un adaptador ELM327 Bluetooth y busca videos de YouTube para repararlos.
+Android app (Flutter) that reads and clears diagnostic trouble codes (DTC) through an ELM327 Bluetooth adapter, shows live sensor readings, and finds YouTube repair videos for each code.
 
-Probada con un Jeep Wrangler TJ 1998 (ISO 9141-2) y un clon ELM327 Bluetooth clásico que no se empareja desde Ajustes.
+Tested with a 1998 Jeep Wrangler TJ (ISO 9141-2) and a Bluetooth Classic ELM327 clone that cannot be paired from the phone's Settings app.
 
-## Funciones
+> The app's interface is in Spanish. Code comments, documentation and release notes are in English.
 
-- Conexión a ELM327 por Bluetooth clásico (socket RFCOMM sin emparejar) o Bluetooth LE.
-- Lectura de códigos almacenados (modo 03) y pendientes (modo 07), con descripción en español.
-- Borrado de códigos (modo 04) con confirmación.
-- Lecturas en vivo: voltaje de batería, temperatura del refrigerante, RPM, velocidad y otras que el vehículo soporte.
-- Varios vehículos guardados en el teléfono; lectura del VIN (modo 09) cuando el vehículo lo entrega.
-- Búsqueda de videos de reparación con Claude Haiku y la YouTube Data API.
-- Pantalla de log con los comandos enviados y las respuestas del adaptador.
+## Features
 
-## Instalar
+- Connects to ELM327 adapters over Bluetooth Classic (RFCOMM socket, no pairing required) or Bluetooth LE.
+- Reads stored (mode 03) and pending (mode 07) codes, with Spanish descriptions.
+- Clears codes (mode 04), with confirmation.
+- Live readings: battery voltage, coolant temperature, RPM, speed and any other PID the vehicle supports.
+- Multiple saved vehicles; reads the VIN (mode 09) when the vehicle provides it, and decodes it with the NHTSA vPIC API.
+- Repair video search: Claude Haiku proposes searches and picks the best videos; results come from the YouTube Data API.
+- Log screen with every command sent and every raw reply, for debugging.
 
-Descarga el APK de [Releases](../../releases) e instálalo en Android 7 o posterior.
+## Install
 
-Para la búsqueda de videos, la app pide tus propias llaves (menú ⋮ → **Llaves de API**, o la primera vez que buscas un video):
+Download the APK from [Releases](../../releases) and install it on an Android device (version 7 or newer).
 
-- **Anthropic**: console.anthropic.com → API Keys.
-- **YouTube**: Google Cloud → habilita YouTube Data API v3 → Credenciales → API key.
+The released APK contains **no API keys**. For video search, open **⋮ → Llaves de API** (or search for a video the first time) and enter:
 
-La app prueba las llaves antes de guardarlas y las guarda cifradas solo en tu teléfono (Android Keystore). El APK publicado no trae ninguna llave.
+- **Anthropic key** — from console.anthropic.com → API Keys.
+- **YouTube key** — from Google Cloud: enable *YouTube Data API v3*, then create an API key under Credentials.
 
-## Compilar
+The app tests both keys before saving them. They are stored encrypted on the device (Android Keystore) and never leave it except in requests to those two services.
 
-Requisitos: Flutter estable y Android SDK.
+## Build
+
+Requirements: Flutter (stable) and the Android SDK.
 
 ```
 flutter build apk --release
 ```
 
-El APK queda en `build/app/outputs/flutter-apk/app-release.apk`. Las llaves se capturan dentro de la app.
+The APK is written to `build/app/outputs/flutter-apk/app-release.apk`.
 
-Opcional, solo para tu propio teléfono: copia `secrets.example.json` a `secrets.json`, pon tus llaves y compila con `--dart-define-from-file=secrets.json` para que la app ya las traiga. `secrets.json` está en `.gitignore`. Ese APK lleva tus llaves adentro: no lo publiques.
+Optional, for your own device only: copy `secrets.example.json` to `secrets.json`, fill in the two keys, and build with `--dart-define-from-file=secrets.json` so the app starts with them. `secrets.json` is git-ignored. An APK built this way contains your keys — do not publish it.
 
-## Pruebas
+## Tests
 
 ```
 flutter test
 ```
 
-Las pruebas usan un ELM327 simulado (`test/fake_elm.dart`) y respuestas simuladas de Claude, YouTube y la NHTSA; no necesitan hardware ni llaves.
+Tests use a simulated ELM327 (`test/fake_elm.dart`) and simulated replies from Claude, YouTube and NHTSA. No hardware or API keys are needed.
+
+## Project layout
+
+- `lib/bluetooth/` — adapter transports (Bluetooth Classic via `SppBridge.kt`, BLE via flutter_blue_plus) and the ELM327 command queue.
+- `lib/obd/` — ISO 9141-2 / CAN protocol handling, DTC and VIN decoding, live data.
+- `lib/vehicle/` — vehicle model, garage storage, NHTSA catalog.
+- `lib/solutions/` — Claude and YouTube clients, video finder, API key storage.
+- `lib/ui/` — screens and dialogs.
+- `android/app/src/main/kotlin/.../SppBridge.kt` — native RFCOMM socket channel.

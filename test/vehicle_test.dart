@@ -17,13 +17,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_elm.dart';
 
-// VIN de ejemplo con formato válido (no es de un vehículo real).
+// Example VIN with a valid format (not a real vehicle).
 const sampleVin = '1N4AB41D25C712345';
 
 String hex(String s) => s.codeUnits.map((c) => c.toRadixString(16).padLeft(2, '0')).join().toUpperCase();
 
-/// Respuesta ISO 9141-2 a 0902: 5 líneas 4902NN + 4 bytes, con 3 bytes de
-/// relleno al inicio.
+/// ISO 9141-2 reply to 0902: 5 lines 4902NN + 4 bytes, with 3 bytes of
+/// padding at the start.
 String isoVinResponse(String vin) {
   final data = '000000${hex(vin)}';
   final lines = <String>[];
@@ -137,13 +137,13 @@ void main() {
       await a.selectVehicle(tsuru.id);
       await a.updateVehicle(Vehicle(id: tsuru.id, make: 'Nissan', model: 'Tsuru', year: 2006));
 
-      // Otra instancia (como al reabrir la app) ve lo mismo.
+      // Another instance (like reopening the app) sees the same thing.
       final b = AppState();
       await b.loadVehicle();
       expect(b.vehicles.map((v) => v.shortName), ['Nissan Tsuru 2006', 'VW Jetta 2012']);
       expect(b.vehicle!.shortName, 'Nissan Tsuru 2006');
 
-      // Borrar el activo deja activo otro.
+      // Deleting the active one leaves another one active.
       await b.deleteVehicle(tsuru.id);
       expect(b.vehicles.single.id, jetta.id);
       expect(b.vehicle!.id, jetta.id);
@@ -198,7 +198,7 @@ void main() {
     });
   });
 
-  /// Toca un campo del formulario, escribe en el buscador y elige.
+  /// Taps a form field, types in the search box and picks.
   Future<void> pick(WidgetTester tester, String field, String query, {String? option}) async {
     await tester.tap(find.byKey(Key(field)));
     await tester.pumpAndSettle();
@@ -296,7 +296,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Elige o escribe el modelo'), findsOneWidget);
 
-    // La lista de modelos no trae repetidos y se filtra con el buscador.
+    // The models list has no duplicates and is filtered with the search box.
     await tester.tap(find.byKey(const Key('vehicle-model')));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Wrangler'), findsOneWidget);
@@ -363,7 +363,7 @@ void main() {
     expect(asked.last, '/api/vehicles/GetModelsForMakeYear/make/Jeep/modelyear/1998');
     await pick(tester, 'vehicle-model', 'wr', option: 'Wrangler');
 
-    // Quitar el año.
+    // Remove the year.
     await tester.tap(find.byKey(const Key('vehicle-year')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('No sé / no aplica'));

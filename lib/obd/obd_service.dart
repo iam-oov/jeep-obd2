@@ -8,8 +8,8 @@ class ObdException extends ElmException {
   ObdException(super.message);
 }
 
-/// Tiempos de espera. Los de ISO 9141-2 son largos: el "5 baud init" tarda
-/// ~2-3 s y la primera consulta puede tardar más.
+/// Timeouts. The ISO 9141-2 ones are long: the "5 baud init" takes
+/// ~2-3 s and the first query can take longer.
 class ObdTimeouts {
   const ObdTimeouts({
     this.reset = const Duration(seconds: 5),
@@ -26,17 +26,17 @@ class ObdTimeouts {
   final Duration query;
 }
 
-/// Resultado de leer códigos (modo 03 o 07).
+/// Result of reading codes (mode 03 or 07).
 class CodeReadResult {
   const CodeReadResult(this.codes, {this.supported = true});
 
   final List<String> codes;
 
-  /// `false` si el ECU respondió que no soporta el modo (típico de 07 en 1998).
+  /// `false` if the ECU replied that it does not support the mode (typical of 07 in 1998).
   final bool supported;
 }
 
-/// Inicialización del ELM327 y lectura/borrado de DTC.
+/// ELM327 initialization and DTC read/clear.
 class ObdService {
   ObdService(this._elm, {this.timeouts = const ObdTimeouts(), this.onLog});
 
@@ -46,13 +46,13 @@ class ObdService {
 
   String? adapterVersion;
 
-  /// Respuesta a 0100 de la inicialización (PIDs 01-20 soportados).
+  /// Reply to 0100 during initialization (PIDs 01-20 supported).
   String? pids0100;
   String? protocolName;
   bool isCan = false;
 
-  /// ATZ, configuración, protocolo ISO 9141-2 y prueba con 0100.
-  /// Si ISO 9141-2 falla, reintenta con detección automática (ATSP0).
+  /// ATZ, configuration, ISO 9141-2 protocol and a 0100 test.
+  /// If ISO 9141-2 fails, retries with automatic detection (ATSP0).
   Future<void> initialize() async {
     final reset = await _resetWithRetry();
     adapterVersion = RegExp(r'ELM327[^\r\n>]*').firstMatch(reset)?.group(0)?.trim();
@@ -99,12 +99,12 @@ class ObdService {
   Future<void> _at(String cmd) async {
     final resp = await _elm.send(cmd, timeout: timeouts.atCommand);
     if (!resp.toUpperCase().contains('OK')) {
-      // Algunos clones no implementan todos los AT; se sigue adelante.
+      // Some clones do not implement every AT command; continue anyway.
       _info('$cmd respondió "$resp" (se continúa)');
     }
   }
 
-  /// Manda 0100 y devuelve true si llega una respuesta 41 00.
+  /// Sends 0100 and returns true if a 41 00 reply arrives.
   Future<bool> _probe(Duration timeout) async {
     try {
       final resp = await _elm.send('0100', timeout: timeout);
@@ -120,17 +120,17 @@ class ObdService {
       final desc = await _elm.send('ATDP', timeout: timeouts.atCommand);
       protocolName = desc.trim();
       final num = await _elm.send('ATDPN', timeout: timeouts.atCommand);
-      // "A6" = automático + protocolo 6. Del 6 al C son CAN.
+      // "A6" = automatic + protocol 6. 6 through C are CAN.
       final digit = _compact(num).replaceFirst('A', '');
       final n = int.tryParse(digit.isEmpty ? '' : digit[0], radix: 16);
       isCan = n != null && n >= 6;
     } on ElmTimeoutException {
-      // No es crítico: se asume no-CAN, que es lo que usan los vehículos anteriores a 2008.
+      // Not critical: assume non-CAN, which is what vehicles before 2008 use.
     }
   }
 
-  /// Modo 09 PID 02: VIN. Devuelve null si el vehículo no lo soporta (lo
-  /// normal antes de ~2005) o si la respuesta no trae un VIN válido.
+  /// Mode 09 PID 02: VIN. Returns null if the vehicle does not support it (which is
+  /// normal before ~2005) or if the reply does not contain a valid VIN.
   Future<String?> readVin() async {
     try {
       final resp = await _elm.send('0902', timeout: timeouts.query);
@@ -143,8 +143,8 @@ class ObdService {
     }
   }
 
-  /// PIDs del modo 01 que soporta el vehículo (consulta 0100, 0120, 0140
-  /// mientras el bit "siguiente bloque" esté encendido).
+  /// Mode 01 PIDs the vehicle supports (queries 0100, 0120, 0140
+  /// while the "next block" bit is set).
   Future<Set<int>> supportedPids() async {
     final supported = <int>{};
     for (final base in [0x00, 0x20, 0x40]) {
@@ -165,8 +165,8 @@ class ObdService {
     return supported;
   }
 
-  /// Lee un PID del modo 01 y devuelve sus bytes de datos (sin "41 PID").
-  /// null si no respondió o no lo soporta.
+  /// Reads a mode 01 PID and returns its data bytes (without "41 PID").
+  /// null if it did not reply or does not support it.
   Future<List<int>?> readPid(int pid) async {
     final hex = pid.toRadixString(16).padLeft(2, '0').toUpperCase();
     try {
@@ -177,8 +177,8 @@ class ObdService {
     }
   }
 
-  /// Voltaje en el pin 16 del conector OBD2 (batería), medido por el propio
-  /// ELM327. Funciona en cualquier vehículo.
+  /// Voltage on OBD2 connector pin 16 (battery), measured by the adapter
+  /// itself. Works on any vehicle.
   Future<double?> readAdapterVoltage() async {
     try {
       final resp = await _elm.send('ATRV', timeout: timeouts.atCommand, quiet: true);
@@ -188,10 +188,10 @@ class ObdService {
     }
   }
 
-  /// Modo 03: códigos almacenados (los que encienden el check engine).
+  /// Mode 03: stored codes (the ones that turn on the check engine light).
   Future<CodeReadResult> readStoredCodes() => _readCodes(3);
 
-  /// Modo 07: códigos pendientes. Muchos ECU de 1998 no lo soportan.
+  /// Mode 07: pending codes. Many 1998 ECUs do not support it.
   Future<CodeReadResult> readPendingCodes() => _readCodes(7);
 
   Future<CodeReadResult> _readCodes(int mode) async {
@@ -203,8 +203,8 @@ class ObdService {
     if (upper.contains('NO DATA')) return const CodeReadResult([]);
     _throwIfError(upper);
 
-    // Al menos una línea debe empezar con 43/47; si no (p. ej. headers
-    // activos "486B10 43..."), decodificar daría un falso "sin códigos".
+    // At least one line must start with 43/47; otherwise (e.g. headers
+    // enabled "486B10 43..."), decoding would give a false "no codes".
     final prefix = responsePrefix(mode);
     final hasDataLine = resp
         .split('\n')
@@ -216,7 +216,7 @@ class ObdService {
     return CodeReadResult(decodeDtcResponse(resp, mode: mode, can: isCan));
   }
 
-  /// Modo 04: borra los códigos y apaga el check engine.
+  /// Mode 04: clears the codes and turns off the check engine light.
   Future<void> clearCodes() async {
     final resp = await _elm.send('04', timeout: timeouts.query);
     final upper = resp.toUpperCase();

@@ -19,7 +19,7 @@ const fast = ObdTimeouts(
   query: Duration(milliseconds: 100),
 );
 
-/// Vehículo que soporta 05, 0C, 0D (BE3EB811 no; máscara armada a mano):
+/// Vehicle that supports 05, 0C, 0D (BE3EB811 no; mask set by hand):
 /// 0100 -> 41 00 18 18 00 00  => PIDs 04,05,0C,0D.
 Map<String, List<FakeReply>> liveScript({String rpm = '410C0BB8'}) => {
       ...jeepScript(probe: [
@@ -115,7 +115,7 @@ void main() {
     expect(poller.engineRunning, isTrue);
     expect(poller.levelOf(param('atrv')), Level.ok);
 
-    // Las lecturas en vivo no llenan el log.
+    // Live readings do not fill the log.
     expect(log.length, logBefore);
   });
 

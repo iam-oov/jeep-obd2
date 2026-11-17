@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Filtra [options] con lo escrito en el buscador.
-/// Con [yearMode]: 1-2 dígitos buscan por terminación ("98" -> 1998),
-/// 3-4 por inicio ("200" -> 2000-2009). Si no, "contiene" sin mayúsculas.
+/// Filters [options] by the text typed in the search box.
+/// With [yearMode]: 1-2 digits match the end ("98" -> 1998),
+/// 3-4 digits match the start ("200" -> 2000-2009). Otherwise, a case-insensitive "contains".
 List<String> filterOptions(List<String> options, String query, {bool yearMode = false}) {
   final q = query.trim().toLowerCase();
   if (q.isEmpty) return options;
@@ -12,11 +12,11 @@ List<String> filterOptions(List<String> options, String query, {bool yearMode = 
   return options.where((o) => o.toLowerCase().contains(q)).toList();
 }
 
-/// Hoja inferior para elegir una opción: buscador arriba y lista abajo, así
-/// el teclado nunca tapa lo que se escribe.
+/// Bottom sheet to pick an option: search box on top, list below, so
+/// the keyboard never covers what is being typed.
 ///
-/// Devuelve la opción elegida, lo escrito (si [allowCustom] y se toca
-/// "Usar «…»"), `''` si se toca [clearLabel], o null si se cierra.
+/// Returns the chosen option, the typed text (if [allowCustom] and the
+/// "Usar «…»" row is tapped), `''` if [clearLabel] is tapped, or null if closed.
 Future<String?> showOptionPicker(
   BuildContext context, {
   required String title,
@@ -97,7 +97,7 @@ class _OptionPickerState extends State<_OptionPicker> {
     final height = MediaQuery.sizeOf(context).height * 0.75;
 
     return Padding(
-      // Sube la hoja por encima del teclado.
+      // Lift the sheet above the keyboard.
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SizedBox(
         height: height,
@@ -176,7 +176,7 @@ class _OptionPickerState extends State<_OptionPicker> {
   }
 }
 
-/// Campo de solo lectura que abre un selector al tocarlo.
+/// Read-only field that opens a picker when tapped.
 class PickerField extends StatelessWidget {
   const PickerField({
     super.key,

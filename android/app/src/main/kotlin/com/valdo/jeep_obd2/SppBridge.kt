@@ -18,16 +18,16 @@ import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 /**
- * Bluetooth Classic SPP (RFCOMM) sin exigir emparejamiento.
+ * Bluetooth Classic SPP (RFCOMM) without requiring pairing.
  *
- * Muchos clones ELM327 no se dejan emparejar desde Ajustes, pero aceptan un
- * socket RFCOMM "inseguro" (sin bond). Se prueban, en orden:
+ * Many ELM327 clones cannot be paired from Settings, but accept an
+ * "insecure" RFCOMM socket (no bond). Tried in order:
  *   1. createInsecureRfcommSocketToServiceRecord(SPP)
  *   2. createRfcommSocketToServiceRecord(SPP)   (seguro: puede pedir PIN)
- *   3. createInsecureRfcommSocket(1) por reflexión (canal 1 directo, sin SDP)
+ *   3. createInsecureRfcommSocket(1) via reflection (direct channel 1, no SDP)
  *
- * Canales:
- *   jeep_obd2/spp        connect(address) -> método usado, write(bytes), close()
+ * Channels:
+ *   jeep_obd2/spp        connect(address) -> method used, write(bytes), close()
  *   jeep_obd2/spp/input  eventos {id, data: ByteArray} o {id, closed: true}
  */
 @SuppressLint("MissingPermission")
@@ -142,7 +142,7 @@ class SppBridge : MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
                     main.post { sink?.success(mapOf("id" to id, "data" to chunk)) }
                 }
             } catch (_: IOException) {
-                // socket cerrado
+                // socket closed
             }
             main.post { sink?.success(mapOf("id" to id, "closed" to true)) }
         }

@@ -12,8 +12,8 @@ import 'api_keys_dialog.dart';
 import 'vehicle_dialog.dart';
 import 'widgets.dart';
 
-/// Abre la búsqueda de videos para [code]. Antes pide, con sus modales, el
-/// vehículo y las llaves de API si faltan.
+/// Opens the video search for [code]. First asks, with their dialogs, for the
+/// vehicle and the API keys if they are missing.
 Future<void> openVideosFor(BuildContext context, String code, String description) async {
   final vehicle = await ensureVehicle(context);
   if (vehicle == null || !context.mounted) return;
@@ -45,7 +45,7 @@ class VideosScreen extends StatefulWidget {
   final String description;
   final Vehicle vehicle;
 
-  /// Para pruebas; en la app se crea con las llaves guardadas.
+  /// For tests; in the app it is created with the saved keys.
   final VideoFinder? finder;
 
   @override

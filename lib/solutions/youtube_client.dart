@@ -28,14 +28,14 @@ class YoutubeVideo {
   final String description;
   final String thumbnailUrl;
 
-  /// Duración ya formateada ("12:34"), si se pudo obtener.
+  /// Already formatted duration ("12:34"), if available.
   String? duration;
   int? views;
 
   Uri get url => Uri.parse('https://www.youtube.com/watch?v=$id');
 }
 
-/// Cliente mínimo de la YouTube Data API v3 (search.list + videos.list).
+/// Minimal client for the YouTube Data API v3 (search.list + videos.list).
 class YoutubeClient {
   YoutubeClient({required this.apiKey, http.Client? httpClient})
       : _http = httpClient ?? http.Client();
@@ -43,7 +43,7 @@ class YoutubeClient {
   final String apiKey;
   final http.Client _http;
 
-  /// Busca videos. Cuesta 100 unidades de la cuota diaria (10 000 gratis).
+  /// Searches videos. Costs 100 units of the daily quota (10,000 free).
   Future<List<YoutubeVideo>> search(String query, {String? language, int max = 8}) async {
     final data = await _get('search', {
       'part': 'snippet',
@@ -61,7 +61,7 @@ class YoutubeClient {
     ];
   }
 
-  /// Completa duración y vistas (1 unidad de cuota por llamada).
+  /// Fills in duration and views (1 quota unit per call).
   Future<void> addDetails(List<YoutubeVideo> videos) async {
     if (videos.isEmpty) return;
     final data = await _get('videos', {
@@ -113,7 +113,7 @@ class YoutubeClient {
     );
   }
 
-  /// search.list devuelve títulos con entidades HTML (&#39; &amp; ...).
+  /// search.list returns titles with HTML entities (&#39; &amp; ...).
   static String _unescape(String s) => s
       .replaceAll('&#39;', "'")
       .replaceAll('&quot;', '"')

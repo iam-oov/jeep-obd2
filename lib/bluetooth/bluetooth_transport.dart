@@ -4,32 +4,32 @@ import 'package:flutter/services.dart';
 
 import 'elm_connection.dart';
 
-/// [ElmTransport] sobre Bluetooth Classic SPP (RFCOMM), con el canal nativo
-/// de `android/app/src/main/kotlin/.../SppBridge.kt`.
+/// [ElmTransport] over Bluetooth Classic SPP (RFCOMM), using the native channel
+/// of `android/app/src/main/kotlin/.../SppBridge.kt`.
 ///
-/// No exige que el adaptador esté emparejado: primero intenta un socket
-/// RFCOMM "inseguro" (sin bond), que es como se conectan las apps OBD a los
-/// clones que fallan al emparejar desde Ajustes.
+/// Does not require the adapter to be paired: it first tries an
+/// "insecure" RFCOMM socket (no bond), which is how OBD apps connect to the
+/// clones that fail to pair from Settings.
 class BluetoothElmTransport implements ElmTransport {
   BluetoothElmTransport._(this._id, this.method);
 
   static const _methods = MethodChannel('jeep_obd2/spp');
   static const _events = EventChannel('jeep_obd2/spp/input');
 
-  /// Un solo listener nativo para toda la app; cada conexión filtra su id.
+  /// A single native listener for the whole app; each connection filters by its id.
   static final Stream<Map<Object?, Object?>> _allEvents =
       _events.receiveBroadcastStream().cast<Map<Object?, Object?>>().asBroadcastStream();
 
   final int _id;
 
-  /// Variante de socket que funcionó: "inseguro", "seguro" o "canal 1".
+  /// Socket variant that worked: "insecure", "secure" or "channel 1".
   final String method;
 
   final _input = StreamController<List<int>>();
   StreamSubscription<Map<Object?, Object?>>? _sub;
 
   static Future<BluetoothElmTransport> connect(String address) async {
-    // Suscribirse antes de conectar para no perder los primeros bytes.
+    // Subscribe before connecting so the first bytes are not lost.
     BluetoothElmTransport? created;
     final pending = <Map<Object?, Object?>>[];
     final sub = _allEvents.listen((e) {

@@ -30,8 +30,8 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   Future<void> _connect(ObdDevice device) async {
     final state = context.read<AppState>();
-    // Ya conectado a ese mismo adaptador: no reabrir el socket (los clones
-    // suelen rechazar una reconexión inmediata).
+    // Already connected to this same adapter: do not reopen the socket (clones
+    // usually reject an immediate reconnection).
     final alreadyReady = state.status == ConnectionStatus.ready &&
         state.device?.address == device.address;
     final ok = alreadyReady || await state.connect(device);
@@ -162,7 +162,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
             else
               for (final d in state.nearby) tile(d),
 
-            // --- Clásico ---
+            // --- Classic ---
             header('Emparejados en este teléfono'),
             if (state.loadingDevices)
               const Padding(

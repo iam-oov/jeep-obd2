@@ -4,7 +4,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'elm_connection.dart';
 
-/// Par de características (notificar = respuestas, escribir = comandos).
+/// Pair of characteristics (notify = replies, write = commands).
 class _UartPair {
   _UartPair(this.notify, this.write);
 
@@ -12,13 +12,13 @@ class _UartPair {
   final BluetoothCharacteristic write;
 }
 
-/// [ElmTransport] sobre Bluetooth LE (GATT), para los ELM327 "BLE" que no se
-/// emparejan desde Ajustes y solo aparecen al buscarlos desde una app.
+/// [ElmTransport] over Bluetooth LE (GATT), for "BLE" ELM327 adapters that are not
+/// paired from Settings and only show up when searched for from an app.
 ///
-/// Estos adaptadores exponen un "UART" sobre GATT: una característica con
-/// notificaciones por donde llegan las respuestas y otra donde se escriben
-/// los comandos. Las respuestas llegan partidas en varias notificaciones;
-/// [ElmConnection] ya junta todo hasta el prompt `>`.
+/// These adapters expose a "UART" over GATT: one characteristic with
+/// notifications through which replies arrive, and another where commands are written.
+/// Replies arrive split across several notifications;
+/// [ElmConnection] already joins everything up to the `>` prompt.
 class BleElmTransport implements ElmTransport {
   BleElmTransport._(this._device, this._pair);
 
@@ -27,7 +27,7 @@ class BleElmTransport implements ElmTransport {
   final _input = StreamController<List<int>>();
   final _subs = <StreamSubscription<dynamic>>[];
 
-  /// Pares conocidos (servicio, notificar, escribir) de los clones comunes.
+  /// Known pairs (service, notify, write) of common clones.
   static final _knownPairs = [
     (Guid('FFE0'), Guid('FFE1'), Guid('FFE1')), // la mayoría de clones "ELM327 BLE"
     (Guid('FFF0'), Guid('FFF1'), Guid('FFF2')), // otros clones
@@ -39,7 +39,7 @@ class BleElmTransport implements ElmTransport {
     ),
   ];
 
-  /// Servicios estándar que nunca son el UART.
+  /// Standard services that are never the UART.
   static final _standardServices = {Guid('1800'), Guid('1801'), Guid('180A'), Guid('180F')};
 
   static Future<BleElmTransport> connect(
@@ -50,7 +50,7 @@ class BleElmTransport implements ElmTransport {
 
     try {
       await device.connect(
-        // Proyecto personal: licencia sin fines de lucro de FlutterBluePlus.
+        // Personal project: FlutterBluePlus non-profit license.
         license: License.nonprofit,
         timeout: const Duration(seconds: 15),
       );
@@ -104,7 +104,7 @@ class BleElmTransport implements ElmTransport {
     BluetoothCharacteristic? find(BluetoothService s, Guid id) =>
         s.characteristics.where((c) => c.uuid == id).firstOrNull;
 
-    // 1) UUIDs conocidos.
+    // 1) Known UUIDs.
     for (final (svc, n, w) in _knownPairs) {
       final service = services.where((s) => s.uuid == svc).firstOrNull;
       if (service == null) continue;
@@ -113,8 +113,8 @@ class BleElmTransport implements ElmTransport {
       if (notify != null && write != null) return _UartPair(notify, write);
     }
 
-    // 2) Cualquier servicio no estándar con una característica que notifique
-    //    y otra (o la misma) donde se pueda escribir.
+    // 2) Any non-standard service with a characteristic that notifies
+    //    and another (or the same) that can be written to.
     for (final s in services.where((s) => !_standardServices.contains(s.uuid))) {
       final notify = s.characteristics
           .where((c) => c.properties.notify || c.properties.indicate)
@@ -148,7 +148,7 @@ class BleElmTransport implements ElmTransport {
   Future<void> write(List<int> bytes) async {
     final c = _pair.write;
     final noResponse = c.properties.writeWithoutResponse && !c.properties.write;
-    // Partir según el MTU negociado (3 bytes son de cabecera ATT).
+    // Split according to the negotiated MTU (3 bytes are ATT header).
     final chunk = (_device.mtuNow - 3).clamp(20, 512);
     for (var i = 0; i < bytes.length; i += chunk) {
       final end = (i + chunk).clamp(0, bytes.length);

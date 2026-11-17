@@ -11,7 +11,7 @@ import 'package:provider/provider.dart';
 const anthropicKey = 'sk-ant-api03-PRUEBA-1234';
 const youtubeKey = 'AIzaPRUEBA-5678';
 
-/// Comprobador falso: [anthropicStatus]/[youtubeStatus] son los códigos HTTP.
+/// Fake checker: [anthropicStatus]/[youtubeStatus] are the HTTP codes.
 ApiKeyChecker fakeChecker({int anthropicStatus = 200, int youtubeStatus = 200, String youtubeBody = '{}'}) =>
     ApiKeyChecker(
       httpClient: MockClient((req) async {
@@ -80,12 +80,12 @@ void main() {
     await tester.tap(find.text('abrir'));
     await tester.pumpAndSettle();
 
-    // Vacías -> no guarda.
+    // Empty -> does not save.
     await tester.tap(find.text('Guardar'));
     await tester.pumpAndSettle();
     expect(find.text('Pega tu llave de Anthropic'), findsOneWidget);
 
-    // Anthropic rechaza la llave -> error en ese campo, no se cierra.
+    // Anthropic rejects the key -> error on that field, dialog stays open.
     apiKeyChecker = fakeChecker(anthropicStatus: 401);
     await tester.enterText(find.byKey(const Key('key-anthropic')), anthropicKey);
     await tester.enterText(find.byKey(const Key('key-youtube')), youtubeKey);
@@ -94,7 +94,7 @@ void main() {
     expect(find.text('Anthropic rechazó esta llave'), findsOneWidget);
     expect(state.apiKeys.complete, isFalse);
 
-    // Ahora sí son válidas.
+    // Now they are valid.
     apiKeyChecker = fakeChecker();
     await tester.tap(find.text('Guardar'));
     await tester.pumpAndSettle();

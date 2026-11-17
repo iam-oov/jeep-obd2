@@ -1,12 +1,12 @@
-/// Lecturas en vivo: definición de PIDs del modo 01, parseo de respuestas y
-/// un "poller" que las consulta en ciclo.
+/// Live readings: mode 01 PID definitions, reply parsing and
+/// a "poller" that queries them in a cycle.
 library;
 
 import 'obd_service.dart';
 
 enum Level { ok, warn, danger }
 
-/// Una lectura en vivo (PID del modo 01, o el voltaje del adaptador).
+/// A live reading (mode 01 PID, or the adapter voltage).
 class LiveParam {
   const LiveParam({
     required this.key,
@@ -23,14 +23,14 @@ class LiveParam {
   final String name;
   final String unit;
 
-  /// PID del modo 01; null para el voltaje del adaptador (ATRV).
+  /// Mode 01 PID; null for the adapter voltage (ATRV).
   final int? pid;
   final int minBytes;
   final double Function(List<int> b)? decode;
   final int decimals;
 
-  /// Nivel de alerta según el valor; [engineRunning] cambia los rangos de
-  /// voltaje (con motor encendido el alternador debe cargar).
+  /// Alert level based on the value; [engineRunning] changes the voltage
+  /// ranges (with the engine running, the alternator must charge).
   final Level Function(double value, {required bool engineRunning})? level;
 }
 
@@ -48,7 +48,7 @@ Level _voltageLevel(double v, {required bool engineRunning}) {
 Level _coolantLevel(double c, {required bool engineRunning}) =>
     c > 112 ? Level.danger : (c > 105 ? Level.warn : Level.ok);
 
-/// Lecturas disponibles, en el orden en que se muestran.
+/// Available readings, in display order.
 final liveParams = <LiveParam>[
   const LiveParam(
     key: 'atrv',
@@ -123,8 +123,8 @@ List<int> _bytes(String hex) => [
 
 final _hexOnly = RegExp(r'^[0-9A-F]+$');
 
-/// Bytes de datos de la respuesta a `01 PID` (lo que sigue a "41 PID").
-/// Si varias computadoras responden, se toma la primera.
+/// Data bytes of the reply to `01 PID` (what follows "41 PID").
+/// If several ECUs reply, the first one is used.
 List<int>? parsePidResponse(String raw, int pid) {
   final prefix = '41${_hex2(pid)}';
   for (final line in raw.split(RegExp(r'[\r\n]+')).map(_compact)) {
@@ -135,8 +135,8 @@ List<int>? parsePidResponse(String raw, int pid) {
   return null;
 }
 
-/// PIDs soportados según la máscara de 4 bytes de `01 00` / `01 20` / ...
-/// El bit más alto del primer byte es el PID base+1.
+/// Supported PIDs from the 4-byte mask of `01 00` / `01 20` / ...
+/// The highest bit of the first byte is PID base+1.
 Set<int> parseSupportedPids(String raw, int base) {
   final data = parsePidResponse(raw, base);
   if (data == null || data.length < 4) return {};
@@ -167,16 +167,16 @@ class LiveValue {
   }
 }
 
-/// Consulta en ciclo las lecturas que el vehículo soporta.
+/// Cyclically queries the readings the vehicle supports.
 class LiveDataPoller {
   LiveDataPoller(this._obd);
 
   final ObdService _obd;
 
-  /// Lecturas que se van a consultar (las soportadas + el voltaje).
+  /// Readings to query (supported ones plus the voltage).
   List<LiveParam> active = [];
 
-  /// Lecturas que el vehículo no soporta (para explicarlo en la UI).
+  /// Readings the vehicle does not support (to explain it in the UI).
   List<LiveParam> unsupported = [];
 
   final values = <String, LiveValue>{};
@@ -195,8 +195,8 @@ class LiveDataPoller {
     ];
   }
 
-  /// Un ciclo: consulta cada lectura activa una vez. Devuelve cuántas
-  /// respondieron.
+  /// One cycle: queries each active reading once. Returns how many
+  /// replied.
   Future<int> pollOnce() async {
     var ok = 0;
     for (final p in active) {

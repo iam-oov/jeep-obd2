@@ -6,11 +6,11 @@ import '../vehicle/catalog.dart';
 import '../vehicle/vehicle.dart';
 import 'option_picker.dart';
 
-/// Catálogo compartido (cachea los modelos ya consultados).
+/// Shared catalog (caches models already fetched).
 VehicleCatalog vehicleCatalog = VehicleCatalog();
 
-/// Modal para capturar o corregir el vehículo. [initial] lo prellena (p. ej.
-/// con lo que devolvió el VIN). Devuelve null si se cancela.
+/// Dialog to capture or correct a vehicle. [initial] pre-fills it (e.g.
+/// with what the VIN returned). Returns null if cancelled.
 Future<Vehicle?> showVehicleDialog(
   BuildContext context, {
   Vehicle? initial,
@@ -22,8 +22,8 @@ Future<Vehicle?> showVehicleDialog(
       builder: (_) => _VehicleDialog(initial: initial, note: note, catalog: vehicleCatalog),
     );
 
-/// Devuelve el vehículo activo. Si no hay, pide elegir uno de los guardados
-/// o agregar uno nuevo. null si el usuario cancela.
+/// Returns the active vehicle. If there is none, asks to pick one of the saved ones
+/// or add a new one. null if the user cancels.
 Future<Vehicle?> ensureVehicle(BuildContext context) async {
   final state = context.read<AppState>();
   if (state.vehicle != null) return state.vehicle;
@@ -33,8 +33,8 @@ Future<Vehicle?> ensureVehicle(BuildContext context) async {
   return _addVehicle(context, note: 'Para buscar videos de tu vehículo necesito saber cuál es.');
 }
 
-/// Después de conectar: el VIN reconocido ya lo activó AppState; si no, se
-/// pregunta cuál es (agregar o elegir) según lo que haya guardado.
+/// After connecting: AppState already activated the recognized VIN; otherwise
+/// it asks which one it is (add or pick), depending on what is saved.
 Future<void> chooseVehicleAfterConnect(BuildContext context) async {
   final state = context.read<AppState>();
   if (state.vinMatch != null) return;
@@ -63,8 +63,8 @@ Future<Vehicle?> _addVehicle(BuildContext context, {Vehicle? initial, String? no
   return state.addVehicle(v);
 }
 
-/// Panel "Mis vehículos": elegir el activo, agregar, editar y borrar.
-/// Devuelve el vehículo elegido (o null si se cierra sin elegir).
+/// "Mis vehículos" panel (UI title in Spanish): pick the active one, add, edit and delete.
+/// Returns the chosen vehicle (or null if closed without choosing).
 Future<Vehicle?> showGarageSheet(BuildContext context, {String title = 'Mis vehículos'}) =>
     showModalBottomSheet<Vehicle>(
       context: context,
@@ -209,7 +209,7 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     _loadModels();
   }
 
-  /// Trae los modelos de la marca (y año, si hay) elegidos ahora.
+  /// Fetches the models for the chosen make (and year, if any).
   Future<void> _loadModels() async {
     final req = ++_request;
     if (_make.trim().isEmpty) {

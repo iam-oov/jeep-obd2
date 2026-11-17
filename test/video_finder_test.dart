@@ -115,13 +115,13 @@ void main() {
     expect(r.likelyFix, contains('relé'));
     expect(r.queries, hasLength(2));
 
-    // 2 búsquedas (máximo) + 1 videos.list
+    // 2 searches (max) + 1 videos.list
     expect(youtubeRequests.where((u) => u.path.endsWith('/search')), hasLength(2));
     expect(youtubeRequests.last.queryParameters['id'], 'aaa,bbb');
     expect(youtubeRequests.first.queryParameters['relevanceLanguage'], 'es');
     expect(youtubeRequests.first.queryParameters['key'], 'yt-test');
 
-    // Petición a Claude: modelo, headers y salida estructurada.
+    // Request to Claude: model, headers and structured output.
     final req = claudeRequests.first;
     expect(req.headers['x-api-key'], 'sk-test');
     expect(req.headers['anthropic-version'], '2026-10-21');
@@ -135,8 +135,8 @@ void main() {
     for (final r in claudeRequests) {
       final prompt = jsonDecode(r.body)['messages'][0]['content'] as String;
       expect(prompt, contains('Nissan Tsuru 2005, motor 1.6L 4 cilindros'));
-      // Las instrucciones no traen ningún vehículo fijo (los títulos de
-      // video simulados sí dicen "Jeep", por eso se quitan).
+      // The instructions contain no fixed vehicle (the simulated
+      // video titles do say "Jeep", so they are removed).
       final instructions = prompt.replaceAll(RegExp(r'^- id: .*$', multiLine: true), '');
       expect(instructions, isNot(matches(RegExp('Jeep|Wrangler|TJ|Chrysler'))));
     }
@@ -175,7 +175,7 @@ void main() {
       ),
     ];
     await expectLater(finder().find('P0001', 'x', vehicle: testVehicle), throwsA(isA<ClaudeException>()));
-    // Sin queries lanza, pero antes decodificó bien: probamos el cliente directo.
+    // Without queries it throws, but it decoded correctly first: we test the client directly.
     claudeQueue = [
       http.Response.bytes(
         utf8.encode(jsonEncode({

@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// El vehículo que se diagnostica. Lo llena el usuario en un modal
-/// (prellenado con el VIN si la computadora lo entrega) y se guarda en el
-/// teléfono; nada del vehículo está escrito en el código.
+/// The vehicle being diagnosed. The user fills it in a dialog
+/// (pre-filled with the VIN if the ECU provides it) and is saved on the
+/// phone; no vehicle data is hard-coded in the source.
 class Vehicle {
   const Vehicle({
     this.id = '',
@@ -17,18 +17,18 @@ class Vehicle {
     this.vin,
   });
 
-  /// Identificador local (se asigna al guardar).
+  /// Local identifier (assigned on save).
   final String id;
   final String make;
   final String model;
   final int? year;
 
-  /// Cilindrada del motor en litros (p. ej. 4.0).
+  /// Engine displacement in liters (e.g. 4.0).
   final double? liters;
   final int? cylinders;
   final String? vin;
 
-  /// "4.0L 6 cilindros", "1.6L", "4 cilindros" o null.
+  /// Formatted engine text (UI text stays in Spanish): "4.0L 6 cilindros", "1.6L", "4 cilindros", or null.
   String? get engine {
     final parts = [
       if (liters != null) '${liters!.toStringAsFixed(1)}L',
@@ -37,7 +37,7 @@ class Vehicle {
     return parts.isEmpty ? null : parts.join(' ');
   }
 
-  /// "Nissan Tsuru 2005, motor 1.6L 4 cilindros" — para prompts y UI.
+  /// "Nissan Tsuru 2005, motor 1.6L 4 cilindros" — used in prompts and UI.
   String get description => [
         '$make $model${year == null ? '' : ' $year'}',
         if (engine != null) 'motor $engine',
@@ -81,7 +81,7 @@ class Vehicle {
   }
 }
 
-/// Versión anterior: motor como texto libre ("4.0L 6 cilindros").
+/// Previous version: engine as free text ("4.0L 6 cilindros").
 double? _legacyLiters(Object? engine) {
   final m = RegExp(r'(\d+(?:[.,]\d)?)\s*L', caseSensitive: false).firstMatch('${engine ?? ''}');
   return m == null ? null : double.tryParse(m.group(1)!.replaceAll(',', '.'));
@@ -92,7 +92,7 @@ int? _legacyCylinders(Object? engine) {
   return m == null ? null : int.tryParse(m.group(1)!);
 }
 
-/// Garage guardado en el teléfono: lista de vehículos y cuál está activo.
+/// Garage saved on the phone: list of vehicles and which one is active.
 class Garage {
   const Garage(this.vehicles, this.activeId);
 
@@ -102,12 +102,12 @@ class Garage {
   Vehicle? get active => vehicles.where((v) => v.id == activeId).firstOrNull;
 }
 
-/// Persistencia en SharedPreferences.
+/// Persistence in SharedPreferences.
 class VehicleStore {
   static const _listKey = 'vehicles';
   static const _activeKey = 'active_vehicle';
 
-  /// Versión anterior: un solo vehículo.
+  /// Previous version: a single vehicle.
   static const _legacyKey = 'vehicle';
 
   Future<Garage> load() async {
@@ -115,7 +115,7 @@ class VehicleStore {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_listKey);
       if (raw == null) {
-        // Migrar el vehículo único de la versión anterior.
+        // Migrate the single vehicle from the previous version.
         final legacy = prefs.getString(_legacyKey);
         final v = legacy == null
             ? null
@@ -157,8 +157,8 @@ final _vinPattern = RegExp(r'^[A-HJ-NPR-Z0-9]{17}$');
 
 bool isValidVin(String vin) => _vinPattern.hasMatch(vin);
 
-/// Año de modelo por la posición 10 del VIN. El ciclo de 30 años es ambiguo
-/// (W = 1998 o 2028): se elige el más reciente que no esté en el futuro.
+/// Model year from VIN position 10. The 30-year cycle is ambiguous
+/// (W = 1998 or 2028): the most recent year not in the future is chosen.
 int? modelYearFromVin(String vin, {int? currentYear}) {
   if (!isValidVin(vin)) return null;
   const codes = 'ABCDEFGHJKLMNPRSTVWXY123456789';
@@ -172,8 +172,8 @@ int? modelYearFromVin(String vin, {int? currentYear}) {
   return year;
 }
 
-/// Decodifica un VIN con la API pública de la NHTSA (vPIC, sin llave).
-/// Devuelve null si no se pudo; el modal queda vacío y el usuario lo llena.
+/// Decodes a VIN with the public NHTSA API (vPIC, no key needed).
+/// Returns null on failure; the dialog stays empty and the user fills it in.
 class VinDecoder {
   VinDecoder({http.Client? httpClient}) : _http = httpClient ?? http.Client();
 
@@ -215,7 +215,7 @@ class VinDecoder {
     }
   }
 
-  /// vPIC devuelve la marca en mayúsculas ("JEEP").
+  /// vPIC returns the make in uppercase ("JEEP").
   static String _titleCase(String s) => s
       .toLowerCase()
       .split(' ')

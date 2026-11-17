@@ -35,7 +35,7 @@ void main() {
     expect(find.text('P1999'), findsOneWidget);
     expect(find.textContaining('específico del fabricante'), findsOneWidget);
     expect(find.textContaining('no reporta códigos pendientes'), findsOneWidget);
-    // Desconectado: los botones de acción están deshabilitados.
+    // Disconnected: the action buttons are disabled.
     final read = tester.widget<ButtonStyleButton>(
       find.ancestor(of: find.text('Leer códigos'), matching: find.byWidgetPredicate((w) => w is ButtonStyleButton)),
     );

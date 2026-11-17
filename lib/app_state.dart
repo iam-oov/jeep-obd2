@@ -17,8 +17,8 @@ enum ConnectionStatus { disconnected, connecting, initializing, ready }
 
 enum DeviceKind { classic, ble }
 
-/// Un adaptador candidato: emparejado por Bluetooth Classic o encontrado
-/// en un escaneo BLE.
+/// A candidate adapter: paired over Bluetooth Classic or found
+/// in a BLE scan.
 class ObdDevice {
   ObdDevice.classic(classic.BluetoothDevice d)
       : name = d.name ?? d.alias ?? '',
@@ -51,7 +51,7 @@ class ObdDevice {
   }
 }
 
-/// Estado global de la app: dispositivos, conexión, códigos y log.
+/// Global app state: devices, connection, codes and log.
 class AppState extends ChangeNotifier {
   AppState({
     classic.FlutterBlueClassic? bluetooth,
@@ -66,7 +66,7 @@ class AppState extends ChangeNotifier {
   final VehicleStore _vehicleStore;
   final ApiKeyStore _apiKeyStore;
 
-  /// Llaves de Anthropic y YouTube para la búsqueda de videos.
+  /// Anthropic and YouTube keys for video search.
   ApiKeys apiKeys = const ApiKeys();
 
   Future<void> loadApiKeys() async {
@@ -88,20 +88,20 @@ class AppState extends ChangeNotifier {
   }
   final VinDecoder _vinDecoder;
 
-  /// Vehículos guardados por el usuario (formulario modal).
+  /// Vehicles saved by the user (modal form).
   List<Vehicle> vehicles = [];
   String? _activeId;
 
-  /// El vehículo que se está diagnosticando.
+  /// The vehicle being diagnosed.
   Vehicle? get vehicle => vehicles.where((v) => v.id == _activeId).firstOrNull;
 
-  /// VIN leído del vehículo conectado (modo 09), si lo entregó.
+  /// VIN read from the connected vehicle (mode 09), if it returned one.
   String? vin;
 
-  /// Lo que dijo la NHTSA del VIN, para prellenar el modal.
+  /// What NHTSA returned for the VIN, to pre-fill the dialog.
   Vehicle? suggestedVehicle;
 
-  /// Vehículo guardado cuyo VIN coincide con el leído al conectar.
+  /// Saved vehicle whose VIN matches the one read on connect.
   Vehicle? get vinMatch => vin == null ? null : vehicles.where((v) => v.vin == vin).firstOrNull;
 
   Future<void> loadVehicle() async {
@@ -113,8 +113,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> _persist() => _vehicleStore.save(Garage(vehicles, _activeId));
 
-  /// Agrega un vehículo nuevo y lo deja activo. El VIN llega en [v] cuando
-  /// el formulario se prellenó con el VIN leído.
+  /// Adds a new vehicle and makes it active. The VIN arrives in [v] when
+  /// the form was pre-filled with the VIN read.
   Future<Vehicle> addVehicle(Vehicle v) async {
     final saved = v.copyWith(id: newVehicleId());
     vehicles = [...vehicles, saved];
@@ -125,7 +125,7 @@ class AppState extends ChangeNotifier {
     return saved;
   }
 
-  /// Reemplaza los datos de [v] (mismo id).
+  /// Replaces the data of [v] (same id).
   Future<void> updateVehicle(Vehicle v) async {
     vehicles = [for (final x in vehicles) x.id == v.id ? v : x];
     await _persist();
@@ -151,30 +151,30 @@ class AppState extends ChangeNotifier {
 
   DtcDescriptions? descriptions;
 
-  // Dispositivos
+  // Devices
   List<ObdDevice> devices = [];
   bool loadingDevices = false;
   List<ObdDevice> nearby = [];
   bool scanning = false;
 
-  // Conexión
+  // Connection
   ConnectionStatus status = ConnectionStatus.disconnected;
   ObdDevice? device;
   ElmConnection? _elm;
   ObdService? _obd;
 
-  /// Servicio OBD de la conexión activa (para lecturas en vivo).
+  /// OBD service of the active connection (for live readings).
   ObdService? get obd => status == ConnectionStatus.ready ? _obd : null;
   String? adapterVersion;
   String? protocolName;
 
-  // Diagnóstico
+  // Diagnosis
   bool busy = false;
   CodeReadResult? stored;
   CodeReadResult? pending;
   DateTime? lastRead;
 
-  /// Último error en lenguaje claro; la UI lo muestra y lo limpia.
+  /// Last error in plain language; the UI shows it and clears it.
   String? error;
 
   // Log
@@ -206,7 +206,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pide permisos, enciende Bluetooth si hace falta y lista los emparejados.
+  /// Requests permissions, turns Bluetooth on if needed, and lists paired devices.
   Future<void> loadBondedDevices() async {
     loadingDevices = true;
     error = null;
@@ -225,8 +225,8 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Busca adaptadores cercanos ~12 s: Bluetooth clásico (como Ajustes,
-  /// incluye los no emparejados) y Bluetooth LE, a la vez.
+  /// Scans for nearby adapters for ~12 s: Bluetooth Classic (like Settings,
+  /// including unpaired ones) and Bluetooth LE, at the same time.
   Future<void> scanNearby() async {
     if (scanning || status != ConnectionStatus.disconnected) return;
     scanning = true;
@@ -236,7 +236,7 @@ class AppState extends ChangeNotifier {
 
     void add(ObdDevice d) {
       if (d.name.isEmpty) return; // sin nombre: casi nunca es un OBD
-      // Un adaptador doble puede salir en ambos: se prefiere el clásico.
+      // A dual-mode adapter can show up in both: Classic is preferred.
       final prev = found[d.address];
       if (prev != null && prev.kind == DeviceKind.classic && d.kind == DeviceKind.ble) return;
       found[d.address] = d;
@@ -260,7 +260,7 @@ class AppState extends ChangeNotifier {
         _log(LogKind.error, 'No se pudo iniciar el escaneo BLE: $e');
       }
 
-      // El descubrimiento clásico de Android dura ~12 s.
+      // Android's Classic discovery lasts ~12 s.
       await Future<void>.delayed(const Duration(seconds: 12));
       final classicCount = found.values.where((d) => d.kind == DeviceKind.classic).length;
       _log(LogKind.info,
@@ -278,7 +278,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Primero los que parecen OBD, luego por señal (BLE) y nombre.
+  /// OBD-looking devices first, then by signal (BLE) and name.
   static int _compare(ObdDevice a, ObdDevice b) {
     if (a.looksLikeObd != b.looksLikeObd) return a.looksLikeObd ? -1 : 1;
     final rssi = (b.rssi ?? -999).compareTo(a.rssi ?? -999);
@@ -291,9 +291,9 @@ class AppState extends ChangeNotifier {
       error = 'Este teléfono no tiene Bluetooth.';
       return false;
     }
-    // Android 12+: connect() del plugin llama cancelDiscovery(), que exige
-    // también BLUETOOTH_SCAN. Ambos salen en un solo diálogo de
-    // "Dispositivos cercanos". En Android 11 o anterior se conceden solos.
+    // Android 12+: the plugin's connect() calls cancelDiscovery(), which requires
+    // BLUETOOTH_SCAN too. Both appear in a single
+    // "Nearby devices" dialog. On Android 11 or older they are granted automatically.
     final perms = await [Permission.bluetoothConnect, Permission.bluetoothScan].request();
     if (!perms.values.every((p) => p.isGranted)) {
       error = perms.values.any((p) => p.isPermanentlyDenied)
@@ -303,7 +303,7 @@ class AppState extends ChangeNotifier {
     }
     if (!await _bluetooth.isEnabled) {
       _bluetooth.turnOn();
-      // Esperar a que el usuario acepte el diálogo del sistema.
+      // Wait for the user to accept the system dialog.
       try {
         await _bluetooth.adapterState
             .firstWhere((s) => s == classic.BluetoothAdapterState.on)
@@ -316,7 +316,7 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
-  /// Conecta por SPP e inicializa el ELM327. Devuelve true si quedó listo.
+  /// Connects over SPP and initializes the ELM327. Returns true if ready.
   Future<bool> connect(ObdDevice target) async {
     if (status != ConnectionStatus.disconnected) await disconnect();
     device = target;
@@ -353,7 +353,7 @@ class AppState extends ChangeNotifier {
       adapterVersion = _obd!.adapterVersion;
       protocolName = _obd!.protocolName;
 
-      // VIN (modo 09). Casi ningún vehículo anterior a ~2005 lo entrega.
+      // VIN (mode 09). Almost no vehicles before ~2005 return it.
       vin = await _obd!.readVin();
       suggestedVehicle = null;
       final match = vinMatch;
@@ -385,7 +385,7 @@ class AppState extends ChangeNotifier {
 
   void _onElmLog(LogEntry entry) {
     addLog(entry);
-    // Si el adaptador corta la conexión, reflejarlo en la UI.
+    // If the adapter drops the connection, reflect it in the UI.
     if (_elm?.isClosed == true && status != ConnectionStatus.disconnected) {
       status = ConnectionStatus.disconnected;
       error ??= 'Se perdió la conexión con el adaptador.';
@@ -409,26 +409,26 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Lee almacenados (03) y pendientes (07).
+  /// Reads stored (03) and pending (07) codes.
   Future<void> readCodes() => _run(() async {
         stored = await _obd!.readStoredCodes();
         try {
           pending = await _obd!.readPendingCodes();
         } on ObdException {
-          // Un fallo en 07 no debe ocultar los códigos de 03.
+          // A failure in 07 must not hide the 03 codes.
           pending = const CodeReadResult([], supported: false);
         }
         lastRead = DateTime.now();
       });
 
-  /// Borra (04) y vuelve a leer para confirmar.
+  /// Clears (04) and reads again to confirm.
   Future<bool> clearCodes() async {
     var ok = false;
     await _run(() async {
       await _obd!.clearCodes();
       _log(LogKind.info, 'Códigos borrados');
       ok = true;
-      // Si la relectura falla, no mostrar la lista de antes del borrado.
+      // If the re-read fails, do not show the list from before clearing.
       stored = null;
       pending = null;
       lastRead = null;

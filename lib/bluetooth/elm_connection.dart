@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-/// Canal de bytes con el adaptador. La implementación real es Bluetooth SPP
-/// (ver `bluetooth_transport.dart`); en las pruebas se usa un ELM simulado.
+/// Byte channel to the adapter. The real implementation is Bluetooth SPP
+/// (see `bluetooth_transport.dart`); tests use a simulated ELM.
 abstract class ElmTransport {
-  /// Bytes recibidos. Se escucha una sola vez.
+  /// Received bytes. Listened to only once.
   Stream<List<int>> get input;
 
   Future<void> write(List<int> bytes);
@@ -25,7 +25,7 @@ class LogEntry {
 class ElmException implements Exception {
   ElmException(this.message);
 
-  /// Mensaje en lenguaje claro para mostrar al usuario.
+  /// Plain-language message to show the user.
   final String message;
 
   @override
@@ -41,10 +41,10 @@ class ElmDisconnectedException extends ElmException {
   ElmDisconnectedException() : super('Se perdió la conexión Bluetooth con el adaptador.');
 }
 
-/// Envía comandos de texto al ELM327 y devuelve la respuesta completa
-/// (todo lo recibido antes del prompt `>`).
+/// Sends text commands to the ELM327 and returns the full reply
+/// (everything received before the `>` prompt).
 ///
-/// Solo hay un comando en vuelo a la vez: las llamadas a [send] se encolan.
+/// Only one command in flight at a time: calls to [send] are queued.
 class ElmConnection {
   ElmConnection(this._transport, {this.onLog}) {
     _sub = _transport.input.listen(
@@ -69,20 +69,20 @@ class ElmConnection {
 
   bool get isClosed => _closed;
 
-  /// Manda [command] (sin `\r`) y espera el prompt `>`.
+  /// Sends [command] (without `\r`) and waits for the `>` prompt.
   ///
-  /// Lanza [ElmTimeoutException] si no llega en [timeout] y
-  /// [ElmDisconnectedException] si se cae la conexión.
+  /// Throws [ElmTimeoutException] if it does not arrive within [timeout], and
+  /// [ElmDisconnectedException] if the connection drops.
   ///
-  /// Con [quiet] no se registran en el log el comando ni su respuesta (para
-  /// las lecturas en vivo, que llenarían el log); los errores sí.
+  /// With [quiet], neither the command nor its reply is logged (for
+  /// live readings, which would fill the log); errors are still logged.
   Future<String> send(
     String command, {
     Duration timeout = const Duration(seconds: 5),
     bool quiet = false,
   }) {
     final result = _queue.then((_) => _sendNow(command, timeout, quiet));
-    // La cola sigue aunque este comando falle.
+    // The queue keeps going even if this command fails.
     _queue = result.then((_) {}, onError: (_) {});
     return result;
   }
@@ -116,7 +116,7 @@ class ElmConnection {
   }
 
   void _onData(List<int> bytes) {
-    // Los clones a veces mandan bytes 0x00 o basura; latin1 nunca falla.
+    // Clones sometimes send 0x00 bytes or garbage; latin1 never fails.
     final text = latin1.decode(bytes.where((b) => b != 0).toList());
     _buffer.write(text);
 
@@ -132,8 +132,8 @@ class ElmConnection {
     if (pending != null && !pending.isCompleted) {
       pending.complete(response);
     } else if (response.trim().isNotEmpty) {
-      // Respuesta que llegó después de un timeout: no se mezcla con el
-      // siguiente comando, solo queda en el log.
+      // Reply that arrived after a timeout: it is not mixed with the
+      // next command; it only stays in the log.
       _log(LogKind.info, 'Respuesta tardía descartada: ${_oneLine(response)}');
     }
   }
@@ -144,7 +144,7 @@ class ElmConnection {
     if (pending != null && !pending.isCompleted) pending.completeError(e);
   }
 
-  /// Quita líneas vacías y el eco del comando (por si el clon ignora ATE0).
+  /// Removes empty lines and the command echo (in case the clone ignores ATE0).
   static String _stripEcho(String raw, String command) {
     final lines = raw
         .split(RegExp(r'[\r\n]+'))

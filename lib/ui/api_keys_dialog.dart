@@ -4,11 +4,11 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../solutions/api_keys.dart';
 
-/// Comprobador compartido (se reemplaza en pruebas).
+/// Shared checker (replaced in tests).
 ApiKeyChecker apiKeyChecker = ApiKeyChecker();
 
-/// Modal para capturar las llaves de Anthropic y YouTube. Las prueba antes
-/// de guardarlas. Devuelve true si se guardaron.
+/// Dialog to capture the Anthropic and YouTube keys. Tests them before
+/// saving them. Returns true if they were saved.
 Future<bool> showApiKeysDialog(BuildContext context, {String? note}) async {
   final saved = await showDialog<bool>(
     context: context,

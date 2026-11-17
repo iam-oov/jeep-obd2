@@ -1,16 +1,15 @@
-/// Decodificación de respuestas OBD2 de modos 03 / 07 a códigos DTC.
+/// Decodes OBD2 responses for modes 03 / 07 into DTC codes.
 ///
-/// Formato ISO 9141-2 / KWP (vehículos anteriores a 2008), con ATS0 y ATH0:
-/// cada línea trae su propio prefijo (`43` o `47`) y hasta 3 códigos de
-/// 2 bytes, rellenando con `0000`. No hay byte de conteo.
+/// ISO 9141-2 / KWP format (vehicles before 2008), with ATS0 and ATH0:
+/// each line carries its own prefix (`43` or `47`) and up to 3 codes of
+/// 2 bytes each, padded with `0000`. There is no count byte.
 ///
 ///     430320139100 00
 ///
-/// Formato CAN (solo si ATSP0 cae en un protocolo CAN): después del prefijo
-/// viene un byte con la cantidad de códigos, y las respuestas largas llegan
-/// en varias tramas numeradas (`0:`, `1:`...) precedidas por una línea de
-/// longitud. Se soporta para no mostrar códigos
-/// falsos.
+/// CAN format (only if ATSP0 lands on a CAN protocol): after the prefix
+/// comes a byte with the number of codes, and long replies arrive
+/// in several numbered frames (`0:`, `1:`...) preceded by a length line.
+/// Supported to avoid showing fake codes.
 library;
 
 const _letters = ['P', 'C', 'B', 'U'];
@@ -19,9 +18,9 @@ final _hexOnly = RegExp(r'^[0-9A-F]+$');
 final _frameIndex = RegExp(r'^[0-9A-F]:');
 final _canLength = RegExp(r'^[0-9A-F]{3}$');
 
-/// Convierte 4 caracteres hex (2 bytes) en un código tipo `P0320`.
+/// Converts 4 hex characters (2 bytes) into a code like `P0320`.
 ///
-/// Devuelve `null` si el texto no son 4 dígitos hex o si es relleno `0000`.
+/// Returns `null` if the text is not 4 hex digits or is `0000` padding.
 String? decodeDtcWord(String hex4) {
   final word = hex4.toUpperCase();
   if (word.length != 4 || !_hexOnly.hasMatch(word) || word == '0000') {
@@ -33,19 +32,19 @@ String? decodeDtcWord(String hex4) {
   return '$letter$digit${word.substring(1)}';
 }
 
-/// Prefijo de respuesta positiva para un modo (03 -> `43`, 07 -> `47`).
+/// Positive-response prefix for a mode (03 -> `43`, 07 -> `47`).
 String responsePrefix(int mode) =>
     (0x40 + mode).toRadixString(16).toUpperCase().padLeft(2, '0');
 
-/// Normaliza una línea: mayúsculas y sin espacios (por si el clon ignora ATS0).
+/// Normalizes a line: uppercase and no spaces (in case the clone ignores ATS0).
 String _compact(String line) => line.replaceAll(RegExp(r'\s'), '').toUpperCase();
 
-/// Extrae los DTC de la respuesta cruda del ELM327 a un comando de modo 03/07.
+/// Extracts the DTCs from the raw ELM327 reply to a mode 03/07 command.
 ///
-/// [raw] es todo el texto recibido antes del prompt `>`. Se ignoran líneas
-/// que no son datos (`SEARCHING...`, `BUS INIT: ...OK`, eco del comando,
-/// `NO DATA`). Los códigos repetidos (p. ej. reportados por dos módulos) se
-/// devuelven una sola vez, en orden de aparición.
+/// [raw] is all the text received before the `>` prompt. Lines that are not data
+/// (`SEARCHING...`, `BUS INIT: ...OK`, command echo,
+/// `NO DATA`) are ignored. Repeated codes (e.g. reported by two modules) are
+/// returned once, in order of appearance.
 List<String> decodeDtcResponse(String raw, {required int mode, bool can = false}) {
   final prefix = responsePrefix(mode);
   final lines = raw
@@ -64,7 +63,7 @@ List<String> decodeDtcResponse(String raw, {required int mode, bool can = false}
   return codes;
 }
 
-/// ISO/KWP: cada línea de datos empieza con el prefijo; lo demás son palabras.
+/// ISO/KWP: each data line starts with the prefix; the rest are words.
 List<String> _isoWords(List<String> lines, String prefix) {
   final words = <String>[];
   for (final line in lines) {
@@ -74,7 +73,7 @@ List<String> _isoWords(List<String> lines, String prefix) {
   return words;
 }
 
-/// CAN: prefijo + byte de conteo, posiblemente partido en varias tramas.
+/// CAN: prefix + count byte, possibly split across several frames.
 List<String> _canWords(List<String> lines, String prefix) {
   final multiFrame = lines.any(_frameIndex.hasMatch);
   final messages = <String>[];
@@ -104,26 +103,26 @@ List<String> _canWords(List<String> lines, String prefix) {
   return words;
 }
 
-/// Parte en bloques completos de 4 caracteres; descarta un resto incompleto.
+/// Splits into complete 4-character blocks; discards an incomplete remainder.
 Iterable<String> _chunks(String data) sync* {
   for (var i = 0; i + 4 <= data.length; i += 4) {
     yield data.substring(i, i + 4);
   }
 }
 
-/// Extrae el VIN de la respuesta a `0902` (modo 09, PID 02).
+/// Extracts the VIN from the reply to `0902` (mode 09, PID 02).
 ///
-/// ISO 9141-2 / KWP: 5 líneas `49 02 NN` + 4 bytes; la primera trae 3 bytes
-/// de relleno (`00 00 00`) antes de la primera letra.
+/// ISO 9141-2 / KWP: 5 lines `49 02 NN` + 4 bytes; the first one carries 3 bytes
+/// of padding (`00 00 00`) before the first letter.
 ///
 ///     490201000000 31
 ///     4902024A34464134 ...
 ///
-/// CAN: una línea de longitud (`014`) y tramas `0:` `1:` `2:` con
-/// `49 02 01` + 17 bytes ASCII.
+/// CAN: one length line (`014`) and frames `0:` `1:` `2:` with
+/// `49 02 01` + 17 ASCII bytes.
 ///
-/// Devuelve null si no hay VIN (`NO DATA`, `?`, respuesta incompleta): los
-/// vehículos anteriores a ~2005 rara vez soportan este modo.
+/// Returns null if there is no VIN (`NO DATA`, `?`, incomplete reply): vehicles
+/// before ~2005 rarely support this mode.
 String? decodeVinResponse(String raw) {
   final lines = raw
       .split(RegExp(r'[\r\n]+'))
@@ -133,7 +132,7 @@ String? decodeVinResponse(String raw) {
 
   final bytes = <int>[];
   if (lines.any(_frameIndex.hasMatch)) {
-    // CAN multitrama: juntar y quitar "49 02 01".
+    // CAN multi-frame: join and strip "49 02 01".
     final joined = StringBuffer();
     for (final line in lines) {
       if (_canLength.hasMatch(line)) continue;
@@ -146,12 +145,12 @@ String? decodeVinResponse(String raw) {
   } else {
     for (final line in lines) {
       if (!_hexOnly.hasMatch(line) || !line.startsWith('4902') || line.length < 6) continue;
-      // CAN de una sola línea: 4902 01 + 17 bytes (sin número de mensaje por línea).
+      // Single-line CAN: 4902 01 + 17 bytes (no message number per line).
       bytes.addAll(_hexBytes(line.substring(6)));
     }
   }
 
-  // Bytes a ASCII; el relleno 0x00 se descarta.
+  // Bytes to ASCII; the 0x00 padding is discarded.
   final text = String.fromCharCodes(
     bytes.where((b) => (b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5A)),
   );

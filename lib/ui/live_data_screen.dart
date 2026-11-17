@@ -12,7 +12,7 @@ import 'widgets.dart';
 class LiveDataScreen extends StatefulWidget {
   const LiveDataScreen({super.key, this.obd});
 
-  /// Para pruebas; en la app se toma la conexión activa de [AppState].
+  /// For tests; in the app it takes the active connection from [AppState].
   final ObdService? obd;
 
   @override
@@ -70,7 +70,7 @@ class _LiveDataScreenState extends State<LiveDataScreen> {
             _error = 'El vehículo dejó de responder. Revisa que el switch siga en ON y reanuda.';
           }
         });
-        // Respiro para no saturar el bus (ISO 9141-2 es lento).
+        // Short pause so as not to saturate the bus (ISO 9141-2 is slow).
         await Future<void>.delayed(const Duration(milliseconds: 150));
       }
     } on ElmDisconnectedException catch (e) {

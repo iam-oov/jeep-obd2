@@ -3,12 +3,12 @@ import 'dart:convert';
 
 import 'package:jeep_obd2/bluetooth/elm_connection.dart';
 
-/// Respuesta del ELM simulado a un comando: trozos de texto que se entregan
-/// por separado (como llegan por Bluetooth). `null` = no responde (timeout).
+/// Simulated ELM reply to a command: text chunks delivered
+/// separately (as they arrive over Bluetooth). `null` = no reply (timeout).
 typedef FakeReply = List<String>?;
 
-/// ELM327 simulado. [script] mapea comando -> respuestas sucesivas; si un
-/// comando se manda más veces que respuestas hay, se repite la última.
+/// Simulated ELM327. [script] maps command -> successive replies; if a
+/// command is sent more times than there are replies, the last one repeats.
 class FakeElmTransport implements ElmTransport {
   FakeElmTransport(this.script, {this.echo = false});
 
@@ -38,7 +38,7 @@ class FakeElmTransport implements ElmTransport {
   }
 
   void _emit(List<String> chunks) {
-    // Entrega asíncrona y en trozos.
+    // Asynchronous delivery in chunks.
     Future<void>(() async {
       for (final c in chunks) {
         await Future<void>.delayed(Duration.zero);
@@ -47,7 +47,7 @@ class FakeElmTransport implements ElmTransport {
     });
   }
 
-  /// Simula que el adaptador corta la conexión.
+  /// Simulates the adapter dropping the connection.
   Future<void> drop() => _controller.close();
 
   @override
@@ -57,7 +57,7 @@ class FakeElmTransport implements ElmTransport {
   }
 }
 
-/// Respuestas típicas de un clon ELM327 con un Jeep TJ (ISO 9141-2).
+/// Typical replies of an ELM327 clone with a Jeep TJ (ISO 9141-2).
 Map<String, List<FakeReply>> jeepScript({
   List<FakeReply>? mode03,
   List<FakeReply>? mode07,

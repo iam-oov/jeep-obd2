@@ -7,7 +7,7 @@ class VideoPick {
 
   final YoutubeVideo video;
 
-  /// Por qué Haiku lo eligió, en español.
+  /// Why Haiku picked it, in Spanish.
   final String reason;
 }
 
@@ -17,22 +17,22 @@ class VideoSearchResult {
   final List<VideoPick> picks;
   final List<String> queries;
 
-  /// Resumen de Haiku: causa probable y qué revisar primero.
+  /// Haiku summary: likely cause and what to check first.
   final String likelyFix;
 }
 
-/// Busca videos de YouTube para reparar un DTC:
-/// 1. Haiku propone búsquedas (español e inglés) para ese código y vehículo.
-/// 2. Se consultan en YouTube y se juntan los resultados.
-/// 3. Haiku elige los videos que realmente sirven y explica por qué.
+/// Finds YouTube videos to repair a DTC:
+/// 1. Haiku proposes searches (Spanish and English) for that code and vehicle.
+/// 2. They are searched on YouTube and the results are merged.
+/// 3. Haiku picks the videos that really help and explains why.
 class VideoFinder {
   VideoFinder({required this.claude, required this.youtube});
 
   final ClaudeClient claude;
   final YoutubeClient youtube;
 
-  /// Resultados de esta sesión de la app: volver a abrir un código no gasta
-  /// cuota de YouTube ni llamadas a Claude.
+  /// Results from this app session: reopening a code does not spend
+  /// YouTube quota or Claude calls.
   static final _cache = <String, VideoSearchResult>{};
 
   static void clearCache() => _cache.clear();
@@ -100,7 +100,7 @@ class VideoFinder {
   }
 
   Future<VideoSearchResult> _find(String code, String description, String vehicle) async {
-    // 1) Búsquedas.
+    // 1) Searches.
     final plan = await claude.json(
       system: _system,
       schema: _querySchema,
@@ -125,10 +125,10 @@ En "likely_fix" escribe en 2 o 3 frases la causa más probable de este código e
       throw ClaudeException('Claude no propuso búsquedas. Reintenta.');
     }
 
-    // 2) YouTube: juntar resultados sin repetir.
+    // 2) YouTube: merge results without duplicates.
     final candidates = <String, YoutubeVideo>{};
     for (final q in queries) {
-      // Cada search.list cuesta 100 de las 10 000 unidades diarias.
+      // Each search.list costs 100 of the 10,000 daily units.
       final found = await youtube.search(q.query, language: q.language, max: 8);
       for (final v in found) {
         candidates.putIfAbsent(v.id, () => v);
@@ -143,7 +143,7 @@ En "likely_fix" escribe en 2 o 3 frases la causa más probable de este código e
     }
     await youtube.addDetails(candidates.values.toList());
 
-    // 3) Haiku elige.
+    // 3) Haiku picks.
     final list = candidates.values.map((v) {
       final desc = v.description.replaceAll(RegExp(r'\s+'), ' ');
       final shortDesc = desc.length > 200 ? '${desc.substring(0, 200)}…' : desc;
@@ -172,7 +172,7 @@ Elige hasta 3 videos que más ayuden a diagnosticar y reparar ESTE código en ES
     final picks = <VideoPick>[];
     for (final p in (ranked['picks'] as List).cast<Map<String, dynamic>>()) {
       final video = candidates[p['video_id']];
-      // Ignorar ids inventados o repetidos.
+      // Ignore invented or repeated ids.
       if (video != null && picks.every((x) => x.video.id != video.id)) {
         picks.add(VideoPick(video, p['reason'] as String));
       }

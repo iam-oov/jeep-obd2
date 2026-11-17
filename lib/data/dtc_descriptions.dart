@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
-/// Descripciones en español de los DTC, cargadas de `assets/dtc_es.json`.
+/// Spanish descriptions of the DTCs, loaded from `assets/dtc_es.json`.
 class DtcDescriptions {
   DtcDescriptions(this._map);
 
@@ -18,7 +18,7 @@ class DtcDescriptions {
 
   int get length => _map.length;
 
-  /// Descripción del código, o un texto que explica por qué no la hay.
+  /// Description of the code, or text explaining why there is none.
   String describe(String code) {
     final known = _map[code.toUpperCase()];
     if (known != null) return known;
@@ -31,7 +31,7 @@ class DtcDescriptions {
 
   bool isKnown(String code) => _map.containsKey(code.toUpperCase());
 
-  /// P1xxx, P3xxx, B1/B2, C1/C2, U1/U2 son definidos por el fabricante.
+  /// P1xxx, P3xxx, B1/B2, C1/C2, U1/U2 are manufacturer-defined.
   static bool isManufacturerSpecific(String code) {
     if (code.length != 5) return false;
     final letter = code[0].toUpperCase();

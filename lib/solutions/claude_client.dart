@@ -5,16 +5,16 @@ import 'package:http/http.dart' as http;
 class ClaudeException implements Exception {
   ClaudeException(this.message);
 
-  /// Mensaje en lenguaje claro para el usuario.
+  /// Plain-language message for the user.
   final String message;
 
   @override
   String toString() => message;
 }
 
-/// Cliente mínimo de la Claude Messages API por HTTP (Dart no tiene SDK
-/// oficial de Anthropic). Solo hace lo que la app necesita: una petición con
-/// salida JSON validada contra un esquema (structured outputs).
+/// Minimal client for the Claude Messages API over HTTP (Dart has no
+/// official Anthropic SDK). It only does what the app needs: one request with
+/// JSON output validated against a schema (structured outputs).
 class ClaudeClient {
   ClaudeClient({required this.apiKey, http.Client? httpClient, this.model = 'claude-haiku-5-5'})
       : _http = httpClient ?? http.Client();
@@ -25,7 +25,7 @@ class ClaudeClient {
 
   static final _endpoint = Uri.parse('https://api.anthropic.com/v1/messages');
 
-  /// Manda [prompt] (con [system]) y devuelve el JSON que cumple [schema].
+  /// Sends [prompt] (with [system]) and returns the JSON that matches [schema].
   Future<Map<String, dynamic>> json({
     required String system,
     required String prompt,
@@ -35,8 +35,8 @@ class ClaudeClient {
     final body = {
       'model': model,
       'max_tokens': maxTokens,
-      // Haiku 5.5 piensa por defecto (adaptativo); para elegir búsquedas y
-      // videos basta poco razonamiento.
+      // Haiku 5.5 thinks by default (adaptive); choosing searches and
+      // videos needs little reasoning.
       'output_config': {
         'effort': 'low',
         'format': {'type': 'json_schema', 'schema': schema},
@@ -47,7 +47,7 @@ class ClaudeClient {
       ],
     };
 
-    // Un reintento ante 5xx/529 (sobrecarga), como en Proyector.
+    // One retry on 5xx/529 (overload), as in the Proyector app.
     http.Response? res;
     for (var attempt = 1; attempt <= 2; attempt++) {
       try {

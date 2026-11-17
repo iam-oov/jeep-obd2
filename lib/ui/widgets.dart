@@ -82,7 +82,7 @@ class ProgressCard extends StatelessWidget {
       );
 }
 
-/// Escribir un código a mano (p. ej. leído con otro escáner) y buscar videos.
+/// Enter a code by hand (e.g. read with another scanner) and search videos.
 class ManualCodeButton extends StatelessWidget {
   const ManualCodeButton({super.key});
 
