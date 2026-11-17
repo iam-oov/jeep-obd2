@@ -5,6 +5,7 @@ import '../app_state.dart';
 import 'api_keys_dialog.dart';
 import 'diagnosis_screen.dart';
 import 'log_screen.dart';
+import 'mailbox_screen.dart';
 import 'vehicle_dialog.dart';
 import 'widgets.dart';
 
@@ -91,6 +92,10 @@ class _DevicesScreenState extends State<DevicesScreen> {
             onSelected: (v) {
               if (v == 'keys') {
                 showApiKeysDialog(context);
+              } else if (v == 'mailbox') {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const MailboxScreen()),
+                );
               } else {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const LogScreen()),
@@ -98,6 +103,10 @@ class _DevicesScreenState extends State<DevicesScreen> {
               }
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'mailbox',
+                child: ListTile(leading: Icon(Icons.inbox), title: Text('Buzón')),
+              ),
               PopupMenuItem(
                 value: 'keys',
                 child: ListTile(leading: Icon(Icons.key), title: Text('Llaves de API')),
