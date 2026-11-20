@@ -8,6 +8,10 @@ import 'log_screen.dart';
 import 'vehicle_dialog.dart';
 import 'widgets.dart';
 
+/// App version shown at the bottom of the devices screen.
+/// Keep in sync with the `version` field of pubspec.yaml.
+const String appVersion = '1.0.0';
+
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
 
@@ -176,6 +180,17 @@ class _DevicesScreenState extends State<DevicesScreen> {
               )
             else
               for (final d in state.devices) tile(d),
+
+            // --- App version ---
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+              child: Text(
+                'Versión $appVersion',
+                key: const Key('app-version'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
           ],
         ),
       ),
