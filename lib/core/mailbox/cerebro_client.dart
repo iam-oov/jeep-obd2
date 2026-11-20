@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 /// Server of coordinating-brain, which receives improvement requests for this
@@ -16,7 +15,6 @@ class CerebroException implements Exception {
   /// Plain-language message for the user (Spanish).
   final String message;
 
-  /// The token is no longer valid: log in again with the code.
   final bool sessionExpired;
 
   @override
@@ -77,15 +75,16 @@ class CerebroRequest {
 }
 
 class CerebroSession {
-  const CerebroSession({required this.token, required this.userName, required this.hasAccess, this.latest});
+  const CerebroSession({required this.token, required this.userName});
 
   final String token;
   final String userName;
+}
 
-  /// The code may send requests to this app.
+class CerebroAppStatus {
+  const CerebroAppStatus({required this.hasAccess, this.latest});
+
   final bool hasAccess;
-
-  /// Latest APK of this app published by the brain.
   final CerebroBuild? latest;
 }
 
@@ -100,16 +99,19 @@ class CerebroClient {
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
-  Future<CerebroSession> login(String code) async {
-    final data = await _send('POST', '/api/login', body: {'code': code});
-    final apps = (data['apps'] as List? ?? const []).cast<Map<String, dynamic>>();
-    final mine = apps.where((a) => a['slug'] == appSlug).firstOrNull;
+  Future<CerebroSession> loginWithGoogle(String idToken) async {
+    final data = await _send('POST', '/api/login/google', body: {'idToken': idToken, 'app': appSlug});
     return CerebroSession(
       token: data['token'] as String,
       userName: (data['user'] as Map?)?['name'] as String? ?? '',
-      hasAccess: mine != null,
-      latest: CerebroBuild.fromJson(mine?['latest']),
     );
+  }
+
+  Future<CerebroAppStatus> appStatus(String token) async {
+    final data = await _send('GET', '/api/apps', token: token);
+    final apps = (data['apps'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final mine = apps.where((a) => a['slug'] == appSlug).firstOrNull;
+    return CerebroAppStatus(hasAccess: mine != null, latest: CerebroBuild.fromJson(mine?['latest']));
   }
 
   Future<List<CerebroRequest>> requests(String token) async {
@@ -156,25 +158,4 @@ class CerebroClient {
     }
     throw CerebroException(message ?? 'El cerebro respondió con un error (${res.statusCode}).');
   }
-}
-
-/// The 4-digit code, stored encrypted on the phone.
-class CerebroCodeStore {
-  CerebroCodeStore({FlutterSecureStorage? storage}) : _storage = storage ?? const FlutterSecureStorage();
-
-  final FlutterSecureStorage _storage;
-  static const _key = 'cerebro_code';
-
-  Future<String?> load() async {
-    try {
-      final v = await _storage.read(key: _key);
-      return (v == null || v.isEmpty) ? null : v;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> save(String code) => _storage.write(key: _key, value: code);
-
-  Future<void> clear() => _storage.delete(key: _key);
 }
