@@ -150,7 +150,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   : IconButton(
                       tooltip: 'Buscar de nuevo',
                       icon: const Icon(Icons.radar),
-                      onPressed: connecting ? null : state.scanNearby,
+                      onPressed: connecting ? null : () => state.scanNearby(userAsked: true),
                     ),
             ),
             if (state.nearby.isEmpty)
