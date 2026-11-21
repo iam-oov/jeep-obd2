@@ -1,14 +1,87 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core_scope.dart';
 import '../widgets.dart';
 import 'cerebro_client.dart';
 
+/// Voice dictation used by the mailbox text field.
+abstract class VoiceDictation {
+  /// Starts listening. [onWords] receives the full transcription of this
+  /// session so far; [onDone] is called once when listening ends (silence,
+  /// stop or error). Returns false if dictation is unavailable.
+  Future<bool> start({required void Function(String words) onWords, required void Function() onDone});
+
+  Future<void> stop();
+}
+
+/// [VoiceDictation] backed by the device speech recognizer.
+class SpeechToTextDictation implements VoiceDictation {
+  SpeechToTextDictation({this.silence = const Duration(seconds: 2)});
+
+  /// Silence that ends the dictation automatically.
+  final Duration silence;
+
+  final SpeechToText _speech = SpeechToText();
+  bool _ready = false;
+  void Function()? _onDone;
+
+  @override
+  Future<bool> start({required void Function(String words) onWords, required void Function() onDone}) async {
+    try {
+      if (!_ready) {
+        _ready = await _speech.initialize(onStatus: _status, onError: (_) => _finish());
+      }
+      if (!_ready) return false;
+      _onDone = onDone;
+      await _speech.listen(
+        onResult: (r) {
+          onWords(r.recognizedWords);
+          if (r.finalResult) _finish();
+        },
+        listenFor: const Duration(minutes: 5),
+        pauseFor: silence,
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: true,
+          listenMode: ListenMode.dictation,
+        ),
+      );
+      return true;
+    } catch (_) {
+      _onDone = null;
+      return false;
+    }
+  }
+
+  void _status(String status) {
+    if (status == SpeechToText.doneStatus || status == SpeechToText.notListeningStatus) _finish();
+  }
+
+  void _finish() {
+    final done = _onDone;
+    _onDone = null;
+    done?.call();
+  }
+
+  @override
+  Future<void> stop() async {
+    try {
+      await _speech.stop();
+    } finally {
+      _finish();
+    }
+  }
+}
+
 class MailboxScreen extends StatefulWidget {
-  const MailboxScreen({super.key, this.openUrl});
+  const MailboxScreen({super.key, this.openUrl, this.dictation});
 
   final Future<bool> Function(Uri url)? openUrl;
+
+  /// Overrides the voice dictation (used by tests).
+  final VoiceDictation? dictation;
 
   @override
   State<MailboxScreen> createState() => _MailboxScreenState();
@@ -24,6 +97,9 @@ class _MailboxScreenState extends State<MailboxScreen> {
   List<CerebroRequest> _requests = const [];
   String? _error;
   bool _busy = false;
+  bool _listening = false;
+  String _dictationBase = '';
+  late final VoiceDictation _dictation = widget.dictation ?? SpeechToTextDictation();
 
   static const _minLength = 16;
   static const _maxLength = 280;
@@ -36,8 +112,46 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
   @override
   void dispose() {
+    if (_listening) {
+      _listening = false;
+      _dictation.stop();
+    }
     _textField.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleDictation() async {
+    if (_listening) {
+      await _dictation.stop();
+      return;
+    }
+    final base = _textField.text.trimRight();
+    _dictationBase = base.isEmpty ? '' : '$base ';
+    setState(() {
+      _listening = true;
+      _error = null;
+    });
+    final ok = await _dictation.start(onWords: _onDictatedWords, onDone: _onDictationDone);
+    if (!ok && mounted) {
+      setState(() {
+        _listening = false;
+        _error = 'No se pudo usar el micrófono. Revisa el permiso de grabar audio.';
+      });
+    }
+  }
+
+  void _onDictatedWords(String words) {
+    if (!mounted) return;
+    var text = '$_dictationBase$words';
+    if (text.length > _maxLength) text = text.substring(0, _maxLength);
+    _textField.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  void _onDictationDone() {
+    if (mounted && _listening) setState(() => _listening = false);
   }
 
   Future<void> _refresh() async {
@@ -68,6 +182,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
   }
 
   Future<void> _send() async {
+    if (_listening) await _dictation.stop();
     final text = _textField.text.trim();
     if (text.length < _minLength) {
       setState(() => _error = 'Escribe al menos $_minLength caracteres.');
@@ -175,6 +290,13 @@ class _MailboxScreenState extends State<MailboxScreen> {
                     ? 'Ya tienes una solicitud en curso. Espera a que termine.'
                     : 'Ej. Mostrar la fecha de la última lectura de códigos',
                 border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  key: const Key('dictate-request'),
+                  tooltip: _listening ? 'Detener dictado' : 'Dictar por voz',
+                  icon: Icon(_listening ? Icons.stop : Icons.mic),
+                  color: _listening ? theme.colorScheme.error : null,
+                  onPressed: _busy || open ? null : _toggleDictation,
+                ),
               ),
             ),
           ),

@@ -56,7 +56,7 @@ void main() {
     });
   });
 
-  Future<(FakeBrain, FakeIdentity, List<Uri>)> pumpMailbox(WidgetTester tester) async {
+  Future<(FakeBrain, FakeIdentity, List<Uri>)> pumpMailbox(WidgetTester tester, {VoiceDictation? dictation}) async {
     final brain = FakeBrain();
     final identity = FakeIdentity()..silent = 'id-osvaldo';
     final session = BrainSession(client: brain.cerebro, identity: identity);
@@ -65,10 +65,13 @@ void main() {
     await tester.pumpWidget(CoreScope(
       session: session,
       child: MaterialApp(
-        home: MailboxScreen(openUrl: (u) async {
-          opened.add(u);
-          return true;
-        }),
+        home: MailboxScreen(
+          dictation: dictation,
+          openUrl: (u) async {
+            opened.add(u);
+            return true;
+          },
+        ),
       ),
     ));
     await tester.pumpAndSettle();
@@ -109,4 +112,83 @@ void main() {
     expect(brain.logins, 2);
     expect(brain.requests, hasLength(1));
   });
+
+  testWidgets('Sugerencias: the mic dictates into the text field; stop ends it', (tester) async {
+    final dictation = _FakeDictation();
+    await pumpMailbox(tester, dictation: dictation);
+    final mic = find.byKey(const Key('dictate-request'));
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('request-text')), 'Agregar');
+    await tester.tap(mic);
+    await tester.pump();
+    expect(dictation.starts, 1);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.stop)), findsOneWidget);
+
+    dictation.say('modo oscuro');
+    await tester.pump();
+    expect(find.text('Agregar modo oscuro'), findsOneWidget);
+    dictation.say('modo oscuro al log');
+    await tester.pump();
+    expect(find.text('Agregar modo oscuro al log'), findsOneWidget);
+
+    await tester.tap(mic);
+    await tester.pump();
+    expect(dictation.stops, 1);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+  });
+
+  testWidgets('Sugerencias: silence ends the dictation; no microphone shows an error', (tester) async {
+    final dictation = _FakeDictation();
+    await pumpMailbox(tester, dictation: dictation);
+    final mic = find.byKey(const Key('dictate-request'));
+
+    await tester.tap(mic);
+    await tester.pump();
+    dictation.say('Mostrar la temperatura');
+    dictation.silence();
+    await tester.pump();
+    expect(find.text('Mostrar la temperatura'), findsOneWidget);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+
+    dictation.available = false;
+    await tester.tap(mic);
+    await tester.pump();
+    expect(find.textContaining('No se pudo usar el micrófono'), findsOneWidget);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+  });
+}
+
+class _FakeDictation implements VoiceDictation {
+  bool available = true;
+  int starts = 0;
+  int stops = 0;
+  void Function(String words)? _onWords;
+  void Function()? _onDone;
+
+  void say(String words) => _onWords?.call(words);
+
+  void silence() => _end();
+
+  void _end() {
+    final done = _onDone;
+    _onDone = null;
+    _onWords = null;
+    done?.call();
+  }
+
+  @override
+  Future<bool> start({required void Function(String words) onWords, required void Function() onDone}) async {
+    starts++;
+    if (!available) return false;
+    _onWords = onWords;
+    _onDone = onDone;
+    return true;
+  }
+
+  @override
+  Future<void> stop() async {
+    stops++;
+    _end();
+  }
 }
