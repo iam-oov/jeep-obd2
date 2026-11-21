@@ -144,7 +144,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
   String? _error;
   bool _busy = false;
   bool _listening = false;
-  String _dictationBase = '';
   String _lastWords = '';
   Timer? _silenceTimer;
   late final VoiceDictation _dictation = widget.dictation ?? SpeechToTextDictation();
@@ -175,8 +174,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
       await _dictation.stop();
       return;
     }
-    final base = _textField.text.trimRight();
-    _dictationBase = base.isEmpty ? '' : '$base ';
     _lastWords = '';
     setState(() {
       _listening = true;
@@ -196,14 +193,14 @@ class _MailboxScreenState extends State<MailboxScreen> {
   }
 
   void _onDictatedWords(String words) {
-    if (!mounted) return;
-    var text = '$_dictationBase$words';
-    if (text.length > _maxLength) text = text.substring(0, _maxLength);
+    if (!mounted || words.trim().isEmpty) return;
+    final capitalized = '${words[0].toUpperCase()}${words.substring(1)}';
+    final text = capitalized.length > _maxLength ? capitalized.substring(0, _maxLength) : capitalized;
     _textField.value = TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
     );
-    if (words.trim().isNotEmpty && words != _lastWords) {
+    if (words != _lastWords) {
       _lastWords = words;
       _silenceTimer?.cancel();
       _silenceTimer = Timer(_silence, _dictation.stop);
