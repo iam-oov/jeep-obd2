@@ -1,7 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Búsqueda de videos (YouTube Data API y Claude API) -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Dictado por voz en el buzón de sugerencias -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Android 12+ -->
@@ -60,7 +59,6 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
-        <!-- speech_to_text: servicio de reconocimiento de voz -->
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>

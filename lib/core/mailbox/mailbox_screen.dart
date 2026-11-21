@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -6,52 +9,69 @@ import '../core_scope.dart';
 import '../widgets.dart';
 import 'cerebro_client.dart';
 
-/// Voice dictation used by the mailbox text field.
 abstract class VoiceDictation {
-  /// Starts listening. [onWords] receives the full transcription of this
-  /// session so far; [onDone] is called once when listening ends (silence,
-  /// stop or error). Returns false if dictation is unavailable.
-  Future<bool> start({required void Function(String words) onWords, required void Function() onDone});
+  Future<bool> start({
+    required void Function(String words) onWords,
+    required void Function(String code) onError,
+    required void Function() onDone,
+  });
 
   Future<void> stop();
 }
 
-/// [VoiceDictation] backed by the device speech recognizer.
 class SpeechToTextDictation implements VoiceDictation {
-  SpeechToTextDictation({this.silence = const Duration(seconds: 2)});
-
-  /// Silence that ends the dictation automatically.
-  final Duration silence;
+  static const _firstWordsWindow = Duration(seconds: 8);
 
   final SpeechToText _speech = SpeechToText();
   bool _ready = false;
+  String? _localeId;
+  void Function(String code)? _onError;
   void Function()? _onDone;
 
   @override
-  Future<bool> start({required void Function(String words) onWords, required void Function() onDone}) async {
+  Future<bool> start({
+    required void Function(String words) onWords,
+    required void Function(String code) onError,
+    required void Function() onDone,
+  }) async {
     try {
       if (!_ready) {
-        _ready = await _speech.initialize(onStatus: _status, onError: (_) => _finish());
+        _ready = await _speech.initialize();
+        if (_ready) _localeId = await _systemLocaleId();
       }
       if (!_ready) return false;
+      _speech
+        ..statusListener = _status
+        ..errorListener = _error;
+      _onError = onError;
       _onDone = onDone;
       await _speech.listen(
         onResult: (r) {
           onWords(r.recognizedWords);
           if (r.finalResult) _finish();
         },
-        listenFor: const Duration(minutes: 5),
-        pauseFor: silence,
         listenOptions: SpeechListenOptions(
           partialResults: true,
           cancelOnError: true,
           listenMode: ListenMode.dictation,
+          listenFor: const Duration(minutes: 5),
+          pauseFor: _firstWordsWindow,
+          localeId: _localeId,
         ),
       );
       return true;
     } catch (_) {
+      _onError = null;
       _onDone = null;
       return false;
+    }
+  }
+
+  Future<String?> _systemLocaleId() async {
+    try {
+      return (await _speech.systemLocale())?.localeId;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -59,9 +79,16 @@ class SpeechToTextDictation implements VoiceDictation {
     if (status == SpeechToText.doneStatus || status == SpeechToText.notListeningStatus) _finish();
   }
 
+  void _error(SpeechRecognitionError error) {
+    if (!error.permanent) return;
+    _onError?.call(error.errorMsg);
+    _finish();
+  }
+
   void _finish() {
     final done = _onDone;
     _onDone = null;
+    _onError = null;
     done?.call();
   }
 
@@ -79,8 +106,6 @@ class MailboxScreen extends StatefulWidget {
   const MailboxScreen({super.key, this.openUrl, this.dictation});
 
   final Future<bool> Function(Uri url)? openUrl;
-
-  /// Overrides the voice dictation (used by tests).
   final VoiceDictation? dictation;
 
   @override
@@ -99,10 +124,13 @@ class _MailboxScreenState extends State<MailboxScreen> {
   bool _busy = false;
   bool _listening = false;
   String _dictationBase = '';
+  String _lastWords = '';
+  Timer? _silenceTimer;
   late final VoiceDictation _dictation = widget.dictation ?? SpeechToTextDictation();
 
   static const _minLength = 16;
   static const _maxLength = 280;
+  static const _silence = Duration(seconds: 2);
 
   @override
   void initState() {
@@ -112,6 +140,7 @@ class _MailboxScreenState extends State<MailboxScreen> {
 
   @override
   void dispose() {
+    _silenceTimer?.cancel();
     if (_listening) {
       _listening = false;
       _dictation.stop();
@@ -127,11 +156,16 @@ class _MailboxScreenState extends State<MailboxScreen> {
     }
     final base = _textField.text.trimRight();
     _dictationBase = base.isEmpty ? '' : '$base ';
+    _lastWords = '';
     setState(() {
       _listening = true;
       _error = null;
     });
-    final ok = await _dictation.start(onWords: _onDictatedWords, onDone: _onDictationDone);
+    final ok = await _dictation.start(
+      onWords: _onDictatedWords,
+      onError: _onDictationError,
+      onDone: _onDictationDone,
+    );
     if (!ok && mounted) {
       setState(() {
         _listening = false;
@@ -148,11 +182,34 @@ class _MailboxScreenState extends State<MailboxScreen> {
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
     );
+    if (words.trim().isNotEmpty && words != _lastWords) {
+      _lastWords = words;
+      _silenceTimer?.cancel();
+      _silenceTimer = Timer(_silence, _dictation.stop);
+    }
+  }
+
+  void _onDictationError(String code) {
+    _silenceTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _listening = false;
+      _error = _dictationErrorMessage(code);
+    });
   }
 
   void _onDictationDone() {
+    _silenceTimer?.cancel();
     if (mounted && _listening) setState(() => _listening = false);
   }
+
+  static String _dictationErrorMessage(String code) => switch (code) {
+        'error_no_match' || 'error_speech_timeout' => 'No se escuchó nada. Habla cerca del micrófono e inténtalo de nuevo.',
+        'error_network' || 'error_network_timeout' => 'El dictado necesita internet.',
+        'error_language_not_supported' || 'error_language_unavailable' =>
+          'Tu teléfono no tiene el idioma del dictado instalado.',
+        _ => 'El dictado falló ($code). Inténtalo de nuevo.',
+      };
 
   Future<void> _refresh() async {
     final session = CoreScope.of(context);
@@ -182,7 +239,9 @@ class _MailboxScreenState extends State<MailboxScreen> {
   }
 
   Future<void> _send() async {
+    final session = CoreScope.of(context);
     if (_listening) await _dictation.stop();
+    if (!mounted) return;
     final text = _textField.text.trim();
     if (text.length < _minLength) {
       setState(() => _error = 'Escribe al menos $_minLength caracteres.');
@@ -193,7 +252,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
       _error = null;
     });
     try {
-      final session = CoreScope.of(context);
       final created = await session.withToken((t) => session.client.send(t, text));
       _textField.clear();
       setState(() => _requests = [created, ..._requests]);
