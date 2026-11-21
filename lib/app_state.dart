@@ -148,6 +148,8 @@ class AppState extends ChangeNotifier {
   }
 
   final classic.FlutterBlueClassic _bluetooth;
+  Future<bool>? _turningOn;
+  bool _turnOnDeclined = false;
 
   DtcDescriptions? descriptions;
 
@@ -227,7 +229,7 @@ class AppState extends ChangeNotifier {
 
   /// Scans for nearby adapters for ~12 s: Bluetooth Classic (like Settings,
   /// including unpaired ones) and Bluetooth LE, at the same time.
-  Future<void> scanNearby() async {
+  Future<void> scanNearby({bool userAsked = false}) async {
     if (scanning || status != ConnectionStatus.disconnected) return;
     scanning = true;
     notifyListeners();
@@ -245,7 +247,7 @@ class AppState extends ChangeNotifier {
     }
 
     try {
-      if (!await _ensureBluetoothReady()) return;
+      if (!await _ensureBluetoothReady(userAsked: userAsked)) return;
 
       subs.add(_bluetooth.scanResults.listen((d) => add(ObdDevice.classic(d))));
       _bluetooth.startScan();
@@ -286,7 +288,7 @@ class AppState extends ChangeNotifier {
     return a.name.compareTo(b.name);
   }
 
-  Future<bool> _ensureBluetoothReady() async {
+  Future<bool> _ensureBluetoothReady({bool userAsked = false}) async {
     if (!await _bluetooth.isSupported) {
       error = 'Este teléfono no tiene Bluetooth.';
       return false;
@@ -301,19 +303,27 @@ class AppState extends ChangeNotifier {
           : 'La app necesita el permiso de "Dispositivos cercanos" para usar Bluetooth.';
       return false;
     }
-    if (!await _bluetooth.isEnabled) {
-      _bluetooth.turnOn();
-      // Wait for the user to accept the system dialog.
-      try {
-        await _bluetooth.adapterState
-            .firstWhere((s) => s == classic.BluetoothAdapterState.on)
-            .timeout(const Duration(seconds: 15));
-      } on TimeoutException {
-        error = 'Bluetooth está apagado. Enciéndelo y vuelve a intentar.';
-        return false;
-      }
+    if (await _bluetooth.isEnabled) return true;
+    if (userAsked) _turnOnDeclined = false;
+    final on = !_turnOnDeclined && await (_turningOn ??= _turnOn().whenComplete(() => _turningOn = null));
+    if (!on) error = 'Bluetooth está apagado. Enciéndelo y vuelve a intentar.';
+    return on;
+  }
+
+  Future<bool> _turnOn() async {
+    if (!await _bluetooth.turnOn()) {
+      _turnOnDeclined = true;
+      return false;
     }
-    return true;
+    if (await _bluetooth.isEnabled) return true;
+    try {
+      await _bluetooth.adapterState
+          .firstWhere((s) => s == classic.BluetoothAdapterState.on)
+          .timeout(const Duration(seconds: 15));
+      return true;
+    } on TimeoutException {
+      return false;
+    }
   }
 
   /// Connects over SPP and initializes the ELM327. Returns true if ready.
@@ -328,7 +338,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (!await _ensureBluetoothReady()) {
+      if (!await _ensureBluetoothReady(userAsked: true)) {
         status = ConnectionStatus.disconnected;
         return false;
       }
