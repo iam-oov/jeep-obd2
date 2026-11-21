@@ -20,11 +20,16 @@ abstract class VoiceDictation {
 }
 
 class SpeechToTextDictation implements VoiceDictation {
-  static const _firstWordsWindow = Duration(seconds: 8);
+  SpeechToTextDictation({SpeechToText? speech}) : _speech = speech ?? SpeechToText();
 
-  final SpeechToText _speech = SpeechToText();
+  static const _firstWordsWindow = Duration(seconds: 8);
+  static const _preferredSpanish = ['es_MX', 'es_US', 'es_419'];
+  static const _fallbackSpanish = 'es_MX';
+
+  final SpeechToText _speech;
   bool _ready = false;
-  String? _localeId;
+  String _localeId = _fallbackSpanish;
+  bool _heard = false;
   void Function(String code)? _onError;
   void Function()? _onDone;
 
@@ -36,19 +41,23 @@ class SpeechToTextDictation implements VoiceDictation {
   }) async {
     try {
       if (!_ready) {
-        _ready = await _speech.initialize();
-        if (_ready) _localeId = await _systemLocaleId();
+        _ready = await _speech.initialize(options: [SpeechToText.androidNoBluetooth]);
+        if (_ready) _localeId = await _spanishLocaleId();
       }
       if (!_ready) return false;
       _speech
         ..statusListener = _status
         ..errorListener = _error;
+      _heard = false;
       _onError = onError;
       _onDone = onDone;
       await _speech.listen(
         onResult: (r) {
-          onWords(r.recognizedWords);
-          if (r.finalResult) _finish();
+          if (r.recognizedWords.trim().isNotEmpty) {
+            _heard = true;
+            onWords(r.recognizedWords);
+          }
+          if (r.finalResult) _end();
         },
         listenOptions: SpeechListenOptions(
           partialResults: true,
@@ -67,16 +76,25 @@ class SpeechToTextDictation implements VoiceDictation {
     }
   }
 
-  Future<String?> _systemLocaleId() async {
+  Future<String> _spanishLocaleId() async {
     try {
-      return (await _speech.systemLocale())?.localeId;
+      final ids = (await _speech.locales()).map((l) => l.localeId).toList();
+      for (final preferred in _preferredSpanish) {
+        if (ids.contains(preferred)) return preferred;
+      }
+      return ids.firstWhere((id) => id.startsWith('es_'), orElse: () => _fallbackSpanish);
     } catch (_) {
-      return null;
+      return _fallbackSpanish;
     }
   }
 
   void _status(String status) {
-    if (status == SpeechToText.doneStatus || status == SpeechToText.notListeningStatus) _finish();
+    if (status == SpeechToText.doneStatus || status == SpeechToText.notListeningStatus) _end();
+  }
+
+  void _end() {
+    if (!_heard) _onError?.call('error_no_match');
+    _finish();
   }
 
   void _error(SpeechRecognitionError error) {
@@ -94,10 +112,13 @@ class SpeechToTextDictation implements VoiceDictation {
 
   @override
   Future<void> stop() async {
+    final done = _onDone;
+    _onDone = null;
+    _onError = null;
     try {
       await _speech.stop();
     } finally {
-      _finish();
+      done?.call();
     }
   }
 }
