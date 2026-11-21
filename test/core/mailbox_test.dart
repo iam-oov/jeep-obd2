@@ -117,29 +117,100 @@ void main() {
     expect(brain.requests, hasLength(1));
   });
 
-  testWidgets('Sugerencias: the mic dictates into the text field; stop ends it', (tester) async {
+  testWidgets('Sugerencias: the mic dictates into the text field, replacing typed text once words arrive; stop ends it', (tester) async {
     final dictation = _FakeDictation();
     await pumpMailbox(tester, dictation: dictation);
     final mic = find.byKey(const Key('dictate-request'));
+    final field = find.byKey(const Key('request-text'));
+    String text() => tester.widget<TextField>(field).controller!.text;
     expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('request-text')), 'Agregar');
+    await tester.enterText(field, 'Agregar');
     await tester.tap(mic);
     await tester.pump();
     expect(dictation.starts, 1);
     expect(find.descendant(of: mic, matching: find.byIcon(Icons.stop)), findsOneWidget);
+    // The tap alone does not clear the field.
+    expect(text(), 'Agregar');
 
     dictation.say('modo oscuro');
     await tester.pump();
-    expect(find.text('Agregar modo oscuro'), findsOneWidget);
+    expect(text(), 'Modo oscuro');
     dictation.say('modo oscuro al log');
     await tester.pump();
-    expect(find.text('Agregar modo oscuro al log'), findsOneWidget);
+    expect(text(), 'Modo oscuro al log');
+    expect(tester.widget<TextField>(field).controller!.selection, const TextSelection.collapsed(offset: 18));
 
     await tester.tap(mic);
     await tester.pump();
     expect(dictation.stops, 1);
     expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+  });
+
+  testWidgets('Sugerencias: a second dictation replaces the first one; an empty one keeps it', (tester) async {
+    final dictation = _FakeDictation();
+    await pumpMailbox(tester, dictation: dictation);
+    final mic = find.byKey(const Key('dictate-request'));
+    String text() => tester.widget<TextField>(find.byKey(const Key('request-text'))).controller!.text;
+
+    await tester.tap(mic);
+    await tester.pump();
+    // The recognizer sends lowercase; only the first letter is capitalized.
+    dictation.say('agregar un modo oscuro a la aplicación');
+    await tester.pump(const Duration(seconds: 2));
+    expect(dictation.stops, 1);
+    expect(text(), 'Agregar un modo oscuro a la aplicación');
+
+    await tester.tap(mic);
+    await tester.pump();
+    dictation.say('mostrar la temperatura del motor');
+    await tester.pump();
+    expect(text(), 'Mostrar la temperatura del motor');
+    await tester.pump(const Duration(seconds: 2));
+
+    // A session that hears nothing leaves the text alone and says so.
+    await tester.tap(mic);
+    await tester.pump();
+    dictation.say('');
+    dictation.fail('error_no_match');
+    await tester.pump();
+    expect(text(), 'Mostrar la temperatura del motor');
+    expect(find.text('No se escuchó nada. Habla cerca del micrófono e inténtalo de nuevo.'), findsOneWidget);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+  });
+
+  testWidgets('Sugerencias: only the first dictated letter is capitalized, Spanish letters included', (tester) async {
+    final dictation = _FakeDictation();
+    await pumpMailbox(tester, dictation: dictation);
+    String text() => tester.widget<TextField>(find.byKey(const Key('request-text'))).controller!.text;
+    await tester.tap(find.byKey(const Key('dictate-request')));
+    await tester.pump();
+    for (final (said, shown) in [
+      ('ñandú en la pantalla de GPS', 'Ñandú en la pantalla de GPS'),
+      ('árbol de códigos OBD', 'Árbol de códigos OBD'),
+      ('Ya empieza con mayúscula', 'Ya empieza con mayúscula'),
+      ('2 segundos de silencio', '2 segundos de silencio'),
+    ]) {
+      dictation.say(said);
+      await tester.pump();
+      expect(text(), shown);
+    }
+    await tester.tap(find.byKey(const Key('dictate-request')));
+    await tester.pump();
+  });
+
+  testWidgets('Sugerencias: dictated text is capped at 280 characters', (tester) async {
+    final dictation = _FakeDictation();
+    await pumpMailbox(tester, dictation: dictation);
+    await tester.tap(find.byKey(const Key('dictate-request')));
+    await tester.pump();
+    dictation.say('a' * 300);
+    await tester.pump();
+    final controller = tester.widget<TextField>(find.byKey(const Key('request-text'))).controller!;
+    expect(controller.text, 'A${'a' * 279}');
+    expect(controller.selection, const TextSelection.collapsed(offset: 280));
+    await tester.tap(find.byKey(const Key('dictate-request')));
+    await tester.pump();
   });
 
   testWidgets('Sugerencias: silence ends the dictation; no microphone shows an error', (tester) async {
