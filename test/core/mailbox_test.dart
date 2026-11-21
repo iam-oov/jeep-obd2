@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -7,6 +9,7 @@ import 'package:jeep_obd2/core/auth/brain_session.dart';
 import 'package:jeep_obd2/core/core_scope.dart';
 import 'package:jeep_obd2/core/mailbox/cerebro_client.dart';
 import 'package:jeep_obd2/core/mailbox/mailbox_screen.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import 'fakes.dart';
 
@@ -253,14 +256,22 @@ void main() {
 
   group('SpeechToTextDictation on the real plugin', () {
     const channel = MethodChannel('plugin.csdcorp.com/speech_to_text');
+    // Like the S10+ in English: the system locale comes first.
+    const englishPhone = ['en_US:English (United States)', 'es_US:Español (Estados Unidos)', 'es_MX:Español (México)'];
+    const noMatch = 'No se escuchó nada. Habla cerca del micrófono e inténtalo de nuevo.';
 
-    List<MethodCall> mockRecognizer(WidgetTester tester) {
+    List<MethodCall> mockRecognizer(
+      WidgetTester tester, {
+      List<String>? locales = englishPhone,
+      Future<void> Function()? whileStopping,
+    }) {
       final calls = <MethodCall>[];
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
         calls.add(call);
+        if (call.method == 'stop') await whileStopping?.call();
         return switch (call.method) {
           'initialize' || 'listen' => true,
-          'locales' => ['es_MX:Español (México)', 'en_US:English (United States)'],
+          'locales' => locales ?? (throw PlatformException(code: 'no_locales')),
           _ => null,
         };
       });
@@ -275,14 +286,26 @@ void main() {
           (_) {},
         );
 
-    testWidgets('waits for the first words instead of stopping after 2 s, in the system locale', (tester) async {
+    Future<void> result(WidgetTester tester, String words, {bool isFinal = false}) => fromRecognizer(
+          tester,
+          'textRecognition',
+          jsonEncode({
+            'alternates': [
+              {'recognizedWords': words, 'confidence': 0.9},
+            ],
+            'resultType': isFinal ? 2 : 0,
+          }),
+        );
+
+    SpeechToTextDictation fresh() => SpeechToTextDictation(speech: SpeechToText.withMethodChannel());
+
+    testWidgets('waits for the first words instead of stopping after 2 s', (tester) async {
       final calls = mockRecognizer(tester);
-      final dictation = SpeechToTextDictation();
+      final dictation = fresh();
       var done = 0;
       expect(await dictation.start(onWords: (_) {}, onError: (_) {}, onDone: () => done++), isTrue);
 
       final listen = calls.singleWhere((c) => c.method == 'listen').arguments as Map;
-      expect(listen['localeId'], 'es_MX');
       expect(listen['pauseFor'], greaterThanOrEqualTo(8000));
       expect(listen['listenFor'], const Duration(minutes: 5).inMilliseconds);
 
@@ -296,15 +319,45 @@ void main() {
       await tester.pump(const Duration(seconds: 5));
     });
 
+    testWidgets('always listens in Spanish, even on a phone in English', (tester) async {
+      const cases = <List<String>?, String>{
+        englishPhone: 'es_MX',
+        ['en_US:English', 'es_419:Español (Latinoamérica)', 'es_US:Español (Estados Unidos)']: 'es_US',
+        ['en_US:English', 'es_419:Español (Latinoamérica)']: 'es_419',
+        ['en_US:English', 'es_ES:Español (España)']: 'es_ES',
+        ['en_US:English']: 'es_MX',
+        null: 'es_MX',
+      };
+      for (final MapEntry(key: locales, value: expected) in cases.entries) {
+        final calls = mockRecognizer(tester, locales: locales);
+        final dictation = fresh();
+        expect(await dictation.start(onWords: (_) {}, onError: (_) {}, onDone: () {}), isTrue);
+        final listen = calls.singleWhere((c) => c.method == 'listen').arguments as Map;
+        expect(listen['localeId'], expected, reason: '$locales');
+        expect(calls.where((c) => c.method == 'systemLocale'), isEmpty);
+        await dictation.stop();
+        await tester.pump(const Duration(seconds: 5));
+      }
+    });
+
+    testWidgets('initializes without Bluetooth headsets, so the phone mic is used', (tester) async {
+      final calls = mockRecognizer(tester);
+      await fresh().start(onWords: (_) {}, onError: (_) {}, onDone: () {});
+      final init = calls.singleWhere((c) => c.method == 'initialize').arguments as Map;
+      expect(init['noBluetooth'], isTrue);
+      await tester.pump(const Duration(seconds: 10));
+    });
+
     testWidgets('a permanent recognizer error reaches the current dictation, also on a later screen', (tester) async {
       mockRecognizer(tester);
-      final first = SpeechToTextDictation();
+      final speech = SpeechToText.withMethodChannel();
+      final first = SpeechToTextDictation(speech: speech);
       await first.start(onWords: (_) {}, onError: (_) {}, onDone: () {});
       await first.stop();
       await tester.pump(const Duration(seconds: 5));
 
-      // A new mailbox screen gets a new dictation over the same plugin singleton.
-      final second = SpeechToTextDictation();
+      // A new mailbox screen gets a new dictation over the same plugin instance.
+      final second = SpeechToTextDictation(speech: speech);
       final errors = <String>[];
       var done = 0;
       await second.start(onWords: (_) {}, onError: errors.add, onDone: () => done++);
@@ -312,6 +365,67 @@ void main() {
       await tester.pump();
       expect(errors, ['error_no_match']);
       expect(done, 1);
+      await tester.pump(const Duration(seconds: 10));
+    });
+
+    testWidgets('a session that ends without words says nothing was heard and resets the mic', (tester) async {
+      mockRecognizer(tester);
+      await pumpMailbox(tester, dictation: fresh());
+      final mic = find.byKey(const Key('dictate-request'));
+
+      // Ambient noise: the recognizer ends with an empty final result.
+      await tester.tap(mic);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: mic, matching: find.byIcon(Icons.stop)), findsOneWidget);
+      await result(tester, '', isFinal: true);
+      await tester.pump();
+      expect(find.text(noMatch), findsOneWidget);
+      expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+
+      // No result at all, only the end of the session.
+      await tester.tap(mic);
+      await tester.pumpAndSettle();
+      expect(find.text(noMatch), findsNothing);
+      await fromRecognizer(tester, 'notifyStatus', 'notListening');
+      await tester.pump();
+      expect(find.text(noMatch), findsOneWidget);
+      expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+    });
+
+    testWidgets('an empty final result after words keeps the text and says nothing', (tester) async {
+      mockRecognizer(tester);
+      await pumpMailbox(tester, dictation: fresh());
+      final mic = find.byKey(const Key('dictate-request'));
+
+      await tester.tap(mic);
+      await tester.pumpAndSettle();
+      await result(tester, 'Mostrar la temperatura');
+      await tester.pump();
+      await result(tester, '', isFinal: true);
+      await tester.pump();
+      expect(find.text('Mostrar la temperatura'), findsOneWidget);
+      expect(find.text(noMatch), findsNothing);
+      expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+    });
+
+    testWidgets('stopping before any words is not an error', (tester) async {
+      // Android reports the end of the session while the stop is still in flight.
+      mockRecognizer(tester, whileStopping: () async {
+        await fromRecognizer(tester, 'notifyStatus', 'notListening');
+        await fromRecognizer(tester, 'notifyStatus', 'doneNoResult');
+      });
+      await pumpMailbox(tester, dictation: fresh());
+      final mic = find.byKey(const Key('dictate-request'));
+
+      await tester.tap(mic);
+      await tester.pumpAndSettle();
+      await tester.tap(mic);
+      await tester.pump();
+      expect(find.text(noMatch), findsNothing);
+      expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
       await tester.pump(const Duration(seconds: 10));
     });
   });
