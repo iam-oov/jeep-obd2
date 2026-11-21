@@ -239,7 +239,9 @@ class _MailboxScreenState extends State<MailboxScreen> {
   }
 
   Future<void> _send() async {
+    final session = CoreScope.of(context);
     if (_listening) await _dictation.stop();
+    if (!mounted) return;
     final text = _textField.text.trim();
     if (text.length < _minLength) {
       setState(() => _error = 'Escribe al menos $_minLength caracteres.');
@@ -250,7 +252,6 @@ class _MailboxScreenState extends State<MailboxScreen> {
       _error = null;
     });
     try {
-      final session = CoreScope.of(context);
       final created = await session.withToken((t) => session.client.send(t, text));
       _textField.clear();
       setState(() => _requests = [created, ..._requests]);
