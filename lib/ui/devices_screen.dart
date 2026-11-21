@@ -128,6 +128,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
             ),
             if (state.error != null)
               ErrorBanner(message: state.error!, onClose: state.clearError),
+            if (state.status == ConnectionStatus.disconnected) const NoConnectionCard(),
             if (connecting)
               ProgressCard(
                 text: state.status == ConnectionStatus.connecting

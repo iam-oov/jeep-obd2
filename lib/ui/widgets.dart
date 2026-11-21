@@ -82,6 +82,37 @@ class ProgressCard extends StatelessWidget {
       );
 }
 
+/// Notice shown while no adapter is connected.
+class NoConnectionCard extends StatelessWidget {
+  const NoConnectionCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      key: const Key('no-connection'),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: scheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.bluetooth_disabled, color: scheme.onSecondaryContainer),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                'No hay ningún dispositivo conectado. Elige tu adaptador OBD2 de la lista '
+                'para conectarte.',
+                style: TextStyle(color: scheme.onSecondaryContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Formats a date and time as "dd/mm/aaaa HH:mm" (24 h), e.g. "05/03/2026 09:07".
 String formatDateTime(DateTime d) {
   String two(int n) => n.toString().padLeft(2, '0');
