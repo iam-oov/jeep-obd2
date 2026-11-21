@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
@@ -157,6 +158,163 @@ void main() {
     expect(find.textContaining('No se pudo usar el micrófono'), findsOneWidget);
     expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
   });
+
+  testWidgets('Sugerencias: no words yet is not silence; the dictation keeps listening', (tester) async {
+    final dictation = _FakeDictation();
+    await pumpMailbox(tester, dictation: dictation);
+    final mic = find.byKey(const Key('dictate-request'));
+
+    await tester.tap(mic);
+    await tester.pump();
+    // The recognizer often needs a moment before the first partial result.
+    await tester.pump(const Duration(seconds: 5));
+    expect(dictation.stops, 0);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.stop)), findsOneWidget);
+
+    dictation.say('Mostrar');
+    await tester.pump();
+    expect(find.text('Mostrar'), findsOneWidget);
+
+    await tester.tap(mic);
+    await tester.pump();
+  });
+
+  testWidgets('Sugerencias: after the first words, 2 seconds of silence stop the dictation', (tester) async {
+    final dictation = _FakeDictation();
+    await pumpMailbox(tester, dictation: dictation);
+    final mic = find.byKey(const Key('dictate-request'));
+
+    await tester.tap(mic);
+    await tester.pump();
+    dictation.say('Mostrar la temperatura');
+    await tester.pump(const Duration(milliseconds: 1999));
+    expect(dictation.stops, 0);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.stop)), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(dictation.stops, 1);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+    expect(find.text('Mostrar la temperatura'), findsOneWidget);
+  });
+
+  testWidgets('Sugerencias: new words restart the silence timer; a repeated result does not', (tester) async {
+    final dictation = _FakeDictation();
+    await pumpMailbox(tester, dictation: dictation);
+    final mic = find.byKey(const Key('dictate-request'));
+
+    await tester.tap(mic);
+    await tester.pump();
+    dictation.say('Mostrar');
+    await tester.pump(const Duration(milliseconds: 1500));
+    dictation.say('Mostrar la temperatura');
+    await tester.pump(const Duration(milliseconds: 1500));
+    expect(dictation.stops, 0);
+
+    // The same transcription again is not new speech.
+    dictation.say('Mostrar la temperatura');
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(dictation.stops, 1);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+  });
+
+  testWidgets('Sugerencias: a recognizer error shows its message and resets the mic', (tester) async {
+    final dictation = _FakeDictation();
+    await pumpMailbox(tester, dictation: dictation);
+    final mic = find.byKey(const Key('dictate-request'));
+
+    const cases = {
+      'error_no_match': 'No se escuchó nada. Habla cerca del micrófono e inténtalo de nuevo.',
+      'error_speech_timeout': 'No se escuchó nada. Habla cerca del micrófono e inténtalo de nuevo.',
+      'error_network': 'El dictado necesita internet.',
+      'error_network_timeout': 'El dictado necesita internet.',
+      'error_language_not_supported': 'Tu teléfono no tiene el idioma del dictado instalado.',
+      'error_language_unavailable': 'Tu teléfono no tiene el idioma del dictado instalado.',
+    };
+    for (final MapEntry(key: code, value: message) in cases.entries) {
+      await tester.tap(mic);
+      await tester.pump();
+      expect(find.descendant(of: mic, matching: find.byIcon(Icons.stop)), findsOneWidget, reason: code);
+      dictation.fail(code);
+      await tester.pump();
+      expect(find.text(message), findsOneWidget, reason: code);
+      expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget, reason: code);
+    }
+
+    await tester.tap(mic);
+    await tester.pump();
+    dictation.say('Mostrar');
+    dictation.fail('error_busy');
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.textContaining('error_busy'), findsOneWidget);
+    expect(find.descendant(of: mic, matching: find.byIcon(Icons.mic)), findsOneWidget);
+    // The error already ended the dictation; the silence timer must not stop it again.
+    expect(dictation.stops, 0);
+  });
+
+  group('SpeechToTextDictation on the real plugin', () {
+    const channel = MethodChannel('plugin.csdcorp.com/speech_to_text');
+
+    List<MethodCall> mockRecognizer(WidgetTester tester) {
+      final calls = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return switch (call.method) {
+          'initialize' || 'listen' => true,
+          'locales' => ['es_MX:Español (México)', 'en_US:English (United States)'],
+          _ => null,
+        };
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+      return calls;
+    }
+
+    Future<void> fromRecognizer(WidgetTester tester, String method, String arguments) =>
+        tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+          channel.name,
+          const StandardMethodCodec().encodeMethodCall(MethodCall(method, arguments)),
+          (_) {},
+        );
+
+    testWidgets('waits for the first words instead of stopping after 2 s, in the system locale', (tester) async {
+      final calls = mockRecognizer(tester);
+      final dictation = SpeechToTextDictation();
+      var done = 0;
+      expect(await dictation.start(onWords: (_) {}, onError: (_) {}, onDone: () => done++), isTrue);
+
+      final listen = calls.singleWhere((c) => c.method == 'listen').arguments as Map;
+      expect(listen['localeId'], 'es_MX');
+      expect(listen['pauseFor'], greaterThanOrEqualTo(8000));
+      expect(listen['listenFor'], const Duration(minutes: 5).inMilliseconds);
+
+      // Before the fix the plugin's own 2 s pause timer stopped here, before any words.
+      await tester.pump(const Duration(seconds: 5));
+      expect(calls.where((c) => c.method == 'stop'), isEmpty);
+      expect(done, 0);
+
+      await dictation.stop();
+      expect(done, 1);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('a permanent recognizer error reaches the current dictation, also on a later screen', (tester) async {
+      mockRecognizer(tester);
+      final first = SpeechToTextDictation();
+      await first.start(onWords: (_) {}, onError: (_) {}, onDone: () {});
+      await first.stop();
+      await tester.pump(const Duration(seconds: 5));
+
+      // A new mailbox screen gets a new dictation over the same plugin singleton.
+      final second = SpeechToTextDictation();
+      final errors = <String>[];
+      var done = 0;
+      await second.start(onWords: (_) {}, onError: errors.add, onDone: () => done++);
+      await fromRecognizer(tester, 'notifyError', '{"errorMsg":"error_no_match","permanent":true}');
+      await tester.pump();
+      expect(errors, ['error_no_match']);
+      expect(done, 1);
+      await tester.pump(const Duration(seconds: 10));
+    });
+  });
 }
 
 class _FakeDictation implements VoiceDictation {
@@ -164,24 +322,36 @@ class _FakeDictation implements VoiceDictation {
   int starts = 0;
   int stops = 0;
   void Function(String words)? _onWords;
+  void Function(String code)? _onError;
   void Function()? _onDone;
 
   void say(String words) => _onWords?.call(words);
 
   void silence() => _end();
 
+  void fail(String code) {
+    _onError?.call(code);
+    _end();
+  }
+
   void _end() {
     final done = _onDone;
     _onDone = null;
     _onWords = null;
+    _onError = null;
     done?.call();
   }
 
   @override
-  Future<bool> start({required void Function(String words) onWords, required void Function() onDone}) async {
+  Future<bool> start({
+    required void Function(String words) onWords,
+    required void Function(String code) onError,
+    required void Function() onDone,
+  }) async {
     starts++;
     if (!available) return false;
     _onWords = onWords;
+    _onError = onError;
     _onDone = onDone;
     return true;
   }
